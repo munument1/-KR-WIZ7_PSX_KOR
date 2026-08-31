@@ -1,0 +1,26 @@
+# PS1 disc images / dumps
+*.bin
+*.cue
+*.chd
+*.iso
+*.img
+*.ccd
+*.sub
+*.mdf
+*.mds
+*.ecm
+
+# Extracted copyrighted game files
+PSX.EXE
+CDS/
+
+# Local working directories
+work/
+build/
+extracted/
+temp/
+tmp/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
