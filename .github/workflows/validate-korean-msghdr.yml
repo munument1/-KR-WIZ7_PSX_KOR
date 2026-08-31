@@ -38,3 +38,22 @@ jobs:
           echo
           cat korean/build/MSGHDR_validation_report.txt
           exit $status
+
+      - name: Build merged Korean MSGHDR
+        run: python korean/tools/build_msghdr_overlay.py
+
+      - name: Analyze Korean character inventory
+        shell: bash
+        run: |
+          python korean/tools/analyze_korean_charset.py
+          echo
+          sed -n '1,12p' korean/build/MSGHDR_charset_report.txt
+
+      - name: Upload validation outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: korean-msghdr-build
+          path: |
+            korean/build/MSGHDR_indexText.ko.merged.txt
+            korean/build/MSGHDR_validation_report.txt
+            korean/build/MSGHDR_charset_report.txt
