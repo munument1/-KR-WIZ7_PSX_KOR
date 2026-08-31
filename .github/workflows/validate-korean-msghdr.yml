@@ -56,6 +56,13 @@ jobs:
           echo
           sed -n '1,40p' korean/build/MSGHDR_bytecode_plan.txt
 
+      - name: Build Korean PSX MSG binaries
+        shell: bash
+        run: |
+          python korean/tools/build_korean_msghdr_binary.py
+          echo
+          cat korean/build/psx/BUILD_REPORT.txt
+
       - name: Upload validation outputs
         uses: actions/upload-artifact@v4
         with:
@@ -66,3 +73,7 @@ jobs:
             korean/build/MSGHDR_charset_report.txt
             korean/build/MSGHDR_bytecode_plan.txt
             korean/build/MSGHDR_hangul_map.tsv
+            korean/build/psx/MISCJ.HDR
+            korean/build/psx/MSGJ.HDR
+            korean/build/psx/MSGJ.DBS
+            korean/build/psx/BUILD_REPORT.txt
