@@ -1,0 +1,33 @@
+name: Validate Korean MSGHDR
+
+on:
+  push:
+    branches:
+      - korean-localization
+    paths:
+      - 'MSGHDR_indexText.txt'
+      - 'korean/**'
+      - '.github/workflows/validate-korean-msghdr.yml'
+  pull_request:
+    paths:
+      - 'MSGHDR_indexText.txt'
+      - 'korean/**'
+      - '.github/workflows/validate-korean-msghdr.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Korean overlays
+        run: python korean/tools/build_msghdr_overlay.py --validate-only
