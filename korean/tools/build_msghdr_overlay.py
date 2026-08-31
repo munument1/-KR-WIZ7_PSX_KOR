@@ -3,7 +3,8 @@
 Build and validate a Korean MSGHDR overlay for Wizardry VII PSX.
 
 The PS1 English MSGHDR text is authoritative for record order, "*" flags,
-control bytes and event tokens. Korean files are sparse overlays:
+control bytes, event tokens and runtime/display markers. Korean files are
+sparse overlays:
     <message id>\\<translated text>
 
 Continuation lines that do not begin with an ID are part of the previous
@@ -15,7 +16,8 @@ mismatches without rewriting the translated prose. Fixups can:
 - use the exact PS1 source record for control-only records,
 - discard extra control bytes while retaining the PS1 control sequence,
 - drop Gold-only IDs absent from the PS1 source,
-- restore PS1 event-token prefixes omitted during translation transfer.
+- restore PS1 event-token prefixes omitted during translation transfer,
+- discard Gold-only percent/display markers that are absent from PS1.
 
 This tool intentionally does not translate or synthesize missing records.
 Untranslated IDs remain the PS1 English source text.
@@ -118,8 +120,6 @@ def decode_control_placeholders(text: str) -> str:
 
 def control_signature(text: str) -> tuple[int, ...]:
     decoded = decode_control_placeholders(text)
-    # Newlines separate continuation lines and are file structure, not MSGHDR
-    # control bytes. Tabs and other C0 bytes may be real menu controls.
     return tuple(ord(ch) for ch in decoded if ord(ch) < 0x20 and ch not in "\r\n")
 
 
@@ -175,12 +175,7 @@ def collect_overlays(paths: Iterable[Path]) -> dict[int, Record]:
 
 
 def reconcile_control_sequence(original: Record, overlay: Record) -> Record:
-    """Remove overlay-only C0 bytes while preserving the PS1 control sequence.
-
-    This is intentionally conservative: the PS1 control sequence must already
-    appear as a subsequence of the Korean overlay. The function only deletes
-    extras; it never invents or reorders controls.
-    """
+    """Remove overlay-only C0 bytes while preserving the PS1 sequence."""
     wanted = list(control_signature(original.text))
     decoded = decode_control_placeholders(overlay.text)
     kept: list[str] = []
@@ -192,7 +187,6 @@ def reconcile_control_sequence(original: Record, overlay: Record) -> Record:
             if wanted_index < len(wanted) and code == wanted[wanted_index]:
                 kept.append(ch)
                 wanted_index += 1
-            # Any other control byte is a Gold-only extra and is discarded.
             continue
         kept.append(ch)
 
@@ -206,6 +200,35 @@ def reconcile_control_sequence(original: Record, overlay: Record) -> Record:
         overlay,
         text="".join(kept),
         source_name=f"{overlay.source_name} [PS1 structure fixup]",
+    )
+
+
+def reconcile_percent_markers(original: Record, overlay: Record) -> Record:
+    """Delete only excess '%' markers inherited from Gold text.
+
+    Existing PS1 '%' markers are retained in their original overlay order. If
+    the overlay has fewer '%' markers than PS1, nothing is invented; normal
+    validation will continue to report the mismatch.
+    """
+    wanted = original.text.count("%")
+    present = overlay.text.count("%")
+    if present <= wanted:
+        return overlay
+
+    kept_count = 0
+    chars: list[str] = []
+    for ch in overlay.text:
+        if ch == "%":
+            if kept_count < wanted:
+                chars.append(ch)
+                kept_count += 1
+            continue
+        chars.append(ch)
+
+    return replace(
+        overlay,
+        text="".join(chars),
+        source_name=f"{overlay.source_name} [PS1 percent fixup]",
     )
 
 
@@ -275,6 +298,32 @@ def apply_structure_fixups(
                 overlay,
                 text=prefix + overlay.text,
                 source_name=f"{overlay.source_name} [PS1 event fixup]",
+            )
+
+    if data.get("reconcile_percent_markers", false := False):
+        # The assignment-expression fallback keeps Python 3.8+ compatibility
+        # while ensuring only an explicit true value enables this global pass.
+        pass
+
+    if data.get("reconcile_percent_markers") is True:
+        for message_id, overlay in list(out.items()):
+            original = source.get(message_id)
+            if original is not None:
+                out[message_id] = reconcile_percent_markers(original, overlay)
+
+    for raw_id in data.get("strip_leading_at_ids", []):
+        message_id = int(raw_id)
+        original = source.get(message_id)
+        overlay = out.get(message_id)
+        if original is None or overlay is None:
+            raise ParseError(
+                f"{fixups_path}: strip_leading_at_ids contains unavailable ID {message_id}"
+            )
+        if overlay.text.startswith("@") and not original.text.startswith("@"):
+            out[message_id] = replace(
+                overlay,
+                text=overlay.text[1:],
+                source_name=f"{overlay.source_name} [PS1 display fixup]",
             )
 
     return out
