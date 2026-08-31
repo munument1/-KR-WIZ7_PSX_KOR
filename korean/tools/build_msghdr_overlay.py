@@ -10,6 +10,13 @@ Continuation lines that do not begin with an ID are part of the previous
 record. Human-readable <0xNN> placeholders in Korean overlays are converted
 back to raw control characters in the merged output.
 
+A small declarative fixup file may correct known Gold-to-PS1 structural
+mismatches without rewriting the translated prose. Fixups can:
+- use the exact PS1 source record for control-only records,
+- discard extra control bytes while retaining the PS1 control sequence,
+- drop Gold-only IDs absent from the PS1 source,
+- restore PS1 event-token prefixes omitted during translation transfer.
+
 This tool intentionally does not translate or synthesize missing records.
 Untranslated IDs remain the PS1 English source text.
 """
@@ -17,9 +24,10 @@ Untranslated IDs remain the PS1 English source text.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterable
 
@@ -32,6 +40,7 @@ REF_TOKEN_RE = re.compile(r"[\^\$%#]")
 DEFAULT_SOURCE = Path("MSGHDR_indexText.txt")
 DEFAULT_MAIN = Path("korean/MSGHDR_indexText.ko.txt")
 DEFAULT_SEGMENTS = Path("korean/segments")
+DEFAULT_FIXUPS = Path("korean/MSGHDR_structure_fixups.json")
 DEFAULT_OUTPUT = Path("korean/build/MSGHDR_indexText.ko.merged.txt")
 DEFAULT_REPORT = Path("korean/build/MSGHDR_validation_report.txt")
 
@@ -165,6 +174,112 @@ def collect_overlays(paths: Iterable[Path]) -> dict[int, Record]:
     return out
 
 
+def reconcile_control_sequence(original: Record, overlay: Record) -> Record:
+    """Remove overlay-only C0 bytes while preserving the PS1 control sequence.
+
+    This is intentionally conservative: the PS1 control sequence must already
+    appear as a subsequence of the Korean overlay. The function only deletes
+    extras; it never invents or reorders controls.
+    """
+    wanted = list(control_signature(original.text))
+    decoded = decode_control_placeholders(overlay.text)
+    kept: list[str] = []
+    wanted_index = 0
+
+    for ch in decoded:
+        code = ord(ch)
+        if code < 0x20 and ch not in "\r\n":
+            if wanted_index < len(wanted) and code == wanted[wanted_index]:
+                kept.append(ch)
+                wanted_index += 1
+            # Any other control byte is a Gold-only extra and is discarded.
+            continue
+        kept.append(ch)
+
+    if wanted_index != len(wanted):
+        raise ParseError(
+            f"cannot reconcile controls for ID {overlay.message_id}: "
+            f"PS1={tuple(wanted)!r} overlay={control_signature(overlay.text)!r}"
+        )
+
+    return replace(
+        overlay,
+        text="".join(kept),
+        source_name=f"{overlay.source_name} [PS1 structure fixup]",
+    )
+
+
+def apply_structure_fixups(
+    source: dict[int, Record],
+    overlays: dict[int, Record],
+    fixups_path: Path,
+) -> dict[int, Record]:
+    if not fixups_path.exists():
+        return overlays
+
+    try:
+        data = json.loads(read_utf8(fixups_path))
+    except json.JSONDecodeError as exc:
+        raise ParseError(f"{fixups_path}: invalid JSON: {exc}") from exc
+
+    out = dict(overlays)
+
+    for raw_id in data.get("drop_overlay_ids", []):
+        out.pop(int(raw_id), None)
+
+    for raw_id in data.get("use_source_record_ids", []):
+        message_id = int(raw_id)
+        original = source.get(message_id)
+        if original is None:
+            raise ParseError(
+                f"{fixups_path}: use_source_record_ids contains missing PS1 ID {message_id}"
+            )
+        out[message_id] = replace(
+            original,
+            source_name=f"{fixups_path} [exact PS1 source record]",
+            source_line=0,
+        )
+
+    for raw_id in data.get("reconcile_control_ids", []):
+        message_id = int(raw_id)
+        original = source.get(message_id)
+        overlay = out.get(message_id)
+        if original is None:
+            raise ParseError(
+                f"{fixups_path}: reconcile_control_ids contains missing PS1 ID {message_id}"
+            )
+        if overlay is None:
+            raise ParseError(
+                f"{fixups_path}: reconcile_control_ids contains missing overlay ID {message_id}"
+            )
+        out[message_id] = reconcile_control_sequence(original, overlay)
+
+    for raw_id, prefix in data.get("prepend_event_tokens", {}).items():
+        message_id = int(raw_id)
+        original = source.get(message_id)
+        overlay = out.get(message_id)
+        if original is None:
+            raise ParseError(
+                f"{fixups_path}: prepend_event_tokens contains missing PS1 ID {message_id}"
+            )
+        if overlay is None:
+            raise ParseError(
+                f"{fixups_path}: prepend_event_tokens contains missing overlay ID {message_id}"
+            )
+        if not isinstance(prefix, str):
+            raise ParseError(
+                f"{fixups_path}: event prefix for ID {message_id} must be a string"
+            )
+        if not overlay.text.startswith(prefix):
+            out[message_id] = replace(
+                overlay,
+                text=prefix + overlay.text,
+                source_name=f"{overlay.source_name} [PS1 event fixup]",
+            )
+
+    return out
+
+
 def validate(
     source: dict[int, Record],
     overlays: dict[int, Record],
@@ -284,6 +399,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source", type=Path, default=DEFAULT_SOURCE)
     parser.add_argument("--main", type=Path, default=DEFAULT_MAIN)
     parser.add_argument("--segments-dir", type=Path, default=DEFAULT_SEGMENTS)
+    parser.add_argument("--fixups", type=Path, default=DEFAULT_FIXUPS)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument(
@@ -307,6 +423,7 @@ def main(argv: list[str] | None = None) -> int:
         source = records_by_id(source_records)
         overlay_paths = load_overlay_files(args.main, args.segments_dir)
         overlays = collect_overlays(overlay_paths)
+        overlays = apply_structure_fixups(source, overlays, args.fixups)
     except (OSError, UnicodeError, ParseError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
