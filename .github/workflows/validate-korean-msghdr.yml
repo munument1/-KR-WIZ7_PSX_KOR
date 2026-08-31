@@ -30,4 +30,11 @@ jobs:
           python-version: '3.11'
 
       - name: Validate Korean overlays
-        run: python korean/tools/build_msghdr_overlay.py --validate-only
+        shell: bash
+        run: |
+          set +e
+          python korean/tools/build_msghdr_overlay.py --validate-only
+          status=$?
+          echo
+          cat korean/build/MSGHDR_validation_report.txt
+          exit $status
