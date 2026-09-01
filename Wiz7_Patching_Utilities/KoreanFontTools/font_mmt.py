@@ -12,7 +12,18 @@ Verified against the Japanese FONT.MMT used by this project:
   logical glyphs  512 * 4 bitplanes = 2048
 
 Each 4-bit pixel stores one bit from four logical glyphs. A logical glyph index
-selects physical_group=index//4 and bitplane=index%4.
+selects physical_group=index//4. The renderer's CLUT selection does *not* map
+logical plane 0..3 to nibble bit 0..3 in identity order. Runtime screenshot
+verification on the real PSX renderer established the mapping:
+
+    logical plane 0 -> physical nibble bit 2
+    logical plane 1 -> physical nibble bit 1
+    logical plane 2 -> physical nibble bit 0
+    logical plane 3 -> physical nibble bit 3
+
+So the physical bit order is (2, 1, 0, 3). Using identity order causes a very
+specific corruption where Hangul assigned to planes 0 and 2 is replaced by the
+other Hangul sharing the same physical 4-glyph cell.
 """
 from __future__ import annotations
 
@@ -31,6 +42,10 @@ GROUP_COLS = WIDTH // CELL_W
 GROUP_ROWS = (HEIGHT - GLYPH_Y0) // CELL_H
 GLYPH_COUNT = GROUP_COLS * GROUP_ROWS * 4
 EXPECTED_SIZE = HEADER_SIZE + BYTES_PER_ROW * HEIGHT
+
+# Renderer logical plane -> physical 4bpp nibble bit.
+# Confirmed from actual game output: 0/2 are swapped; 1/3 are unchanged.
+PHYSICAL_PLANE_BY_LOGICAL = (2, 1, 0, 3)
 
 
 @dataclass(frozen=True)
@@ -73,7 +88,8 @@ def glyph_origin(index: int) -> Tuple[int, int, int]:
     if not 0 <= index < GLYPH_COUNT:
         raise ValueError(f"glyph index out of range: {index} (0..{GLYPH_COUNT - 1})")
     group = index // 4
-    plane = index & 3
+    logical_plane = index & 3
+    plane = PHYSICAL_PLANE_BY_LOGICAL[logical_plane]
     x0 = (group % GROUP_COLS) * CELL_W
     y0 = GLYPH_Y0 + (group // GROUP_COLS) * CELL_H
     return x0, y0, plane
@@ -103,7 +119,7 @@ def replace_glyph(
     x_offset: int = 0,
     y_offset: int = 0,
 ) -> bytes:
-    """Replace one logical bitplane and preserve the other three glyphs."""
+    """Replace one logical renderer plane and preserve the other three glyphs."""
     validate_font(data)
     if glyph_w <= 0 or glyph_h <= 0 or glyph_w > CELL_W or glyph_h > CELL_H:
         raise ValueError("glyph dimensions must fit inside 16x12")
