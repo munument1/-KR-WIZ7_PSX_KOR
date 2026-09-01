@@ -15,8 +15,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y mame-tools
-          mkdir -p out
-          cp "$(command -v chdman)" out/chdman
+          mkdir -p out/lib
+          CHDMAN="$(command -v chdman)"
+          cp "$CHDMAN" out/chdman
+          ldd "$CHDMAN" | awk '/=> \/.*/ {print $3}' | while read -r lib; do
+            cp -L "$lib" out/lib/
+          done
+          ldd "$CHDMAN"
 
       - name: Download mkpsxiso toolchain
         run: |
@@ -25,8 +30,8 @@ jobs:
           find /tmp/mkpsxiso -maxdepth 1 -type f -print
           cp "$(find /tmp/mkpsxiso -maxdepth 1 -type f -name mkpsxiso -print -quit)" out/mkpsxiso
           cp "$(find /tmp/mkpsxiso -maxdepth 1 -type f -name dumpsxiso -print -quit)" out/dumpsxiso
-          chmod +x out/*
-          out/chdman -help >/dev/null || true
+          chmod +x out/chdman out/mkpsxiso out/dumpsxiso
+          LD_LIBRARY_PATH="$PWD/out/lib" out/chdman -help >/dev/null || true
           out/mkpsxiso -h >/dev/null || true
           out/dumpsxiso -h >/dev/null || true
 
