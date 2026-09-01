@@ -1,0 +1,26 @@
+name: Fetch Upstream WIZ7 English Patch
+
+on:
+  push:
+    branches: [korean-localization]
+    paths:
+      - '.github/workflows/fetch-upstream-wiz7-eng.yml'
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download upstream English patch
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 \
+            -o WIZ7_ENG_PATCH_V1_0.zip \
+            'https://github.com/gertius1/WIZ7_PSX_ENG/releases/download/V1_0/WIZ7_ENG_PATCH_V1_0.zip'
+          unzip -l WIZ7_ENG_PATCH_V1_0.zip
+          sha256sum WIZ7_ENG_PATCH_V1_0.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upstream-wiz7-eng-v1.0
+          path: WIZ7_ENG_PATCH_V1_0.zip
+          if-no-files-found: error
