@@ -56,6 +56,10 @@ those leaves **1850 slots** for Korean while preserving the existing ASCII and
 half-width conversion table targets. Korean allocation proceeds from slot 2047
 downward, keeping as much distance as possible from the legacy low-slot area.
 
+For CI builds that intentionally do not contain game assets, the builder also
+supports `--reserve-low-through 279`. This conservatively reserves every slot
+from 0 through 279 and leaves **1768 high slots** for Korean.
+
 ## Galmuri11 extraction
 
 The user does not need to create glyph images. `build_korean_font.py` reads the
@@ -144,6 +148,23 @@ python -m unittest -v
 The current tests cover all 2048 native code/slot round trips, the real
 ZENKAKU.TBL reservation count, BDF extraction, real FONT.MMT geometry, bitplane
 preservation, and patched-font generation.
+
+## Automated current-translation build
+
+`.github/workflows/build-psx-korean-font.yml` keeps the technical branch
+separate from translation work. On the technical branch it checks out the latest
+`korean-localization` branch, downloads the pinned official Galmuri11 BDF from
+v2.40.4, reserves slots `0..279`, and generates a copyright-safe artifact:
+
+- `charset.txt`
+- `korean_dbcs.tsv`
+- `build_info.json`
+- `korean_glyphs.bin`
+- `korean_glyphs.tsv`
+
+The workflow never uploads `FONT.MMT`, `ZENKAKU.TBL`, `PSX.EXE`, or any disc
+image. The generated mapping/bitmap artifact can later be combined locally with
+the user's extracted original `FONT.MMT` to produce `FONT_KOR.MMT`.
 
 ## Remaining integration work
 
