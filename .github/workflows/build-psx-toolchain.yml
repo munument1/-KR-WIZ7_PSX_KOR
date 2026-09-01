@@ -11,13 +11,14 @@ jobs:
   tools:
     runs-on: ubuntu-latest
     steps:
-      - name: Install chdman
+      - name: Install disc and patch tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y mame-tools
+          sudo apt-get install -y mame-tools xdelta3
           mkdir -p out/lib
           CHDMAN="$(command -v chdman)"
           cp "$CHDMAN" out/chdman
+          cp "$(command -v xdelta3)" out/xdelta3
           ldd "$CHDMAN" | awk '/=> \/.*/ {print $3}' | while read -r lib; do
             cp -L "$lib" out/lib/
           done
@@ -30,10 +31,11 @@ jobs:
           find /tmp/mkpsxiso -maxdepth 1 -type f -print
           cp "$(find /tmp/mkpsxiso -maxdepth 1 -type f -name mkpsxiso -print -quit)" out/mkpsxiso
           cp "$(find /tmp/mkpsxiso -maxdepth 1 -type f -name dumpsxiso -print -quit)" out/dumpsxiso
-          chmod +x out/chdman out/mkpsxiso out/dumpsxiso
+          chmod +x out/chdman out/mkpsxiso out/dumpsxiso out/xdelta3
           LD_LIBRARY_PATH="$PWD/out/lib" out/chdman -help >/dev/null || true
           out/mkpsxiso -h >/dev/null || true
           out/dumpsxiso -h >/dev/null || true
+          out/xdelta3 -V
 
       - uses: actions/upload-artifact@v4
         with:
