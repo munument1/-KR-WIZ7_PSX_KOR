@@ -1,0 +1,37 @@
+name: Build PSX Toolchain
+
+on:
+  push:
+    branches: [korean-localization]
+    paths:
+      - '.github/workflows/build-psx-toolchain.yml'
+  workflow_dispatch:
+
+jobs:
+  tools:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install chdman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mame-tools
+          mkdir -p out
+          cp "$(command -v chdman)" out/chdman
+
+      - name: Download mkpsxiso toolchain
+        run: |
+          wget -q https://github.com/Lameguy64/mkpsxiso/releases/download/v2.30/mkpsxiso-2.30-Linux.zip -O /tmp/mkpsxiso.zip
+          unzip -j /tmp/mkpsxiso.zip -d /tmp/mkpsxiso
+          find /tmp/mkpsxiso -maxdepth 1 -type f -print
+          cp "$(find /tmp/mkpsxiso -maxdepth 1 -type f -name mkpsxiso -print -quit)" out/mkpsxiso
+          cp "$(find /tmp/mkpsxiso -maxdepth 1 -type f -name dumpsxiso -print -quit)" out/dumpsxiso
+          chmod +x out/*
+          out/chdman -help >/dev/null || true
+          out/mkpsxiso -h >/dev/null || true
+          out/dumpsxiso -h >/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: psx-toolchain-linux
+          path: out/
+          if-no-files-found: error
