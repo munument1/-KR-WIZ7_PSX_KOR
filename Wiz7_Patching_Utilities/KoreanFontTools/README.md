@@ -1,64 +1,79 @@
 # Wizardry VII PSX Korean font pipeline
 
-This directory contains the first Korean-specific tooling for the PSX port.
-It is intentionally separated from the original English patch utilities so the
-encoding/font experiments can be reviewed and reverted independently.
+This directory contains the Korean-specific font/encoding work for the PSX port.
 
 ## Why the 1-byte menus are not necessarily English-only
 
-The decompiled `FUN_ASCIItoZENKAKU()` in this repository has a special path for
-input bytes `0x80..0x9F`: it copies the current byte and the following byte to
-the output without passing them through the ASCII lookup table. In other words,
-the existing Japanese executable already has a two-byte ingress path before the
-text renderer.
+The decompiled `FUN_ASCIItoZENKAKU()` has a special path for input bytes
+`0x80..0x9F`: it copies the current byte and the following byte to the output.
+That means the Japanese executable already accepts a two-byte text path before
+the renderer.
 
-That makes the working Korean design:
+Working design:
 
 ```text
 ASCII bytes              -> existing ASCII -> ZENKAKU mapping
 Korean two-byte sequence -> existing 0x80..0x9F pass-through -> PSX renderer
 ```
 
-This is useful for `SCENARIJ.DBS` and other byte-oriented menu/item strings: the
-storage can remain a byte string while Korean characters occupy two bytes.
-Whether every field has enough *length* for the expanded strings still has to be
-checked per structure.
+This can be used for `SCENARIJ.DBS` and other byte-oriented menu/item strings.
+Individual field lengths still have to be checked because one Korean character
+uses two bytes.
 
-## Current status
+## Galmuri11 bitmap extraction
 
-`build_korean_font.py` currently provides only safe, reproducible intermediate
-steps:
+The user does not need to pre-extract Galmuri glyph images.
 
-1. Scan UTF-8/CP949/EUC-KR translation files for the actually used Hangul.
-2. Allocate a deterministic provisional two-byte code for each Hangul glyph.
-3. Read the official Galmuri11 BDF and extract only the required glyphs.
-4. Emit an 11x11 logical bitmap intermediate (`korean_glyphs.bin`).
-5. Encode Unicode text using the generated mapping.
+`build_korean_font.py` does the extraction itself:
 
-It does **not** yet patch `PSX.EXE` or produce a native game font file. The
-repository documents `ZENKAKU.TBL` as a 16-bit character mapping table, but the
-actual downstream two-byte-code -> glyph bitmap/index calculation has not yet
-been documented. We should verify that formula before writing a native packer.
+1. scans translation files for the actually used Hangul,
+2. creates a deterministic provisional DBCS table,
+3. downloads the official `Galmuri11.bdf` from `quiple/galmuri` by default,
+4. parses each BDF `BITMAP` block directly,
+5. emits only the required 11x11 logical glyphs.
 
-The generated DBCS values are therefore marked **PROVISIONAL**. Do not bulk
-insert them into a ROM image until the renderer mapping has been verified with a
-small one-glyph test.
+For offline use, `--bdf path/to/Galmuri11.bdf` can be supplied. The Galmuri font
+file itself is not committed to this repository.
 
-## Galmuri11
+Galmuri is licensed under SIL Open Font License 1.1.
 
-Galmuri is maintained at `quiple/galmuri` and is licensed under the SIL Open Font
-License 1.1. The font itself is not copied into this repository. Obtain the
-official `dist/Galmuri11.bdf` and pass its local path to the tool.
+## Verified FONT.MMT layout
+
+`font_mmt.py` reads and writes the actual PSX `FONT.MMT` structure.
+
+Verified geometry:
+
+- file size: 50,724 bytes
+- header: 36 bytes
+- pixel payload: 1024 x 99, 4bpp
+- CLUT/palette area: y=0..2
+- glyph area: y=3..98
+- physical glyph cell: 16 x 12
+- 64 x 8 physical cells = 512 physical groups
+- four logical glyphs share each physical cell as four nibble bitplanes
+- total logical glyph slots: 2048
+
+A logical glyph index uses:
+
+```text
+physical_group = glyph_index // 4
+bitplane       = glyph_index % 4
+```
+
+The packer preserves the other three glyph bitplanes when replacing one glyph.
+Round-trip testing against the real Japanese `FONT.MMT` confirms that extracting
+ASCII `A` (logical slot 65) and writing it back produces a byte-identical file.
+Blanking only slot 65 leaves the neighboring `9`, `B`, and `C` bitplanes intact.
 
 ## Usage
 
-Build a charset/mapping from translation files:
+Build charset + DBCS + Galmuri11 bitmap intermediates:
 
 ```bash
 python build_korean_font.py build path/to/translations --out build/korean-font
 ```
 
-Also extract Galmuri11 glyphs:
+Offline Galmuri source:
 
 ```bash
 python build_korean_font.py build path/to/translations \
@@ -66,7 +81,7 @@ python build_korean_font.py build path/to/translations \
   --out build/korean-font
 ```
 
-Encode a UTF-8 text file using the generated mapping:
+Encode a Unicode text file with the generated mapping:
 
 ```bash
 python build_korean_font.py encode \
@@ -75,7 +90,7 @@ python build_korean_font.py encode \
   --output translated.dbcs
 ```
 
-Run tests from this directory:
+Run tests:
 
 ```bash
 python -m unittest -v
@@ -83,25 +98,24 @@ python -m unittest -v
 
 ## Generated files
 
-- `charset.txt` - sorted Hangul character set.
-- `korean_dbcs.tsv` - Unicode/code/frequency table.
-- `build_info.json` - records that the allocation is provisional.
-- `korean_glyphs.bin` - optional Galmuri11 logical bitmap stream; each glyph is
-  11 rows of a 16-bit big-endian value (22 bytes/glyph). This is an intermediate
-  representation, **not** the confirmed PSX native font format.
-- `korean_glyphs.tsv` - offsets and code associations for the bitmap stream.
+- `charset.txt` - used Hangul characters
+- `korean_dbcs.tsv` - Unicode/provisional code mapping
+- `build_info.json` - build metadata
+- `korean_glyphs.bin` - 11x11 Galmuri bitmap rows, 22 bytes per glyph
+- `korean_glyphs.tsv` - glyph offsets and code associations
 
-## Next reverse-engineering checkpoint
+## Remaining reverse-engineering checkpoint
 
-Before a real ROM patch is generated, trace the consumer of the two-byte output
-from `FUN_ASCIItoZENKAKU()` and determine:
+The font container itself is now understood. The remaining important step is to
+determine the complete formula used by the renderer to turn a passed-through
+2-byte code into one of the 2048 logical glyph indices.
 
-1. which lead/trail combinations are legal downstream,
-2. how the two bytes select a Japanese glyph,
-3. where that glyph bitmap is loaded from,
-4. the native pixel dimensions/packing,
-5. whether string-length and width calculations count bytes or characters.
+One confirmed point is:
 
-Then replace one Japanese glyph slot with one Hangul glyph (for example `가`),
-encode a single test label through the `0x80..0x9F` pass-through path, and verify
-it in an emulator before scaling up the table.
+```text
+ASCII 'A' -> ZENKAKU.TBL 0x80A5 -> FONT.MMT logical slot 65
+```
+
+Once the complete code-to-slot mapping is recovered, the provisional Korean
+DBCS allocator can be replaced with the real renderer-compatible allocator and
+the tool can automatically pack all required Galmuri11 glyphs into `FONT.MMT`.
