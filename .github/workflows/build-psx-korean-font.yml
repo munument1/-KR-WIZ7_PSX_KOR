@@ -3,10 +3,11 @@ name: Build PSX Korean Font Assets
 on:
   push:
     branches:
-      - feat/korean-font-pipeline
+      - korean-localization
     paths:
       - '.github/workflows/build-psx-korean-font.yml'
       - 'Wiz7_Patching_Utilities/KoreanFontTools/**'
+      - 'korean/**'
   workflow_dispatch:
 
 permissions:
@@ -16,14 +17,8 @@ jobs:
   build-font-assets:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout font tooling
+      - name: Checkout Korean localization
         uses: actions/checkout@v4
-
-      - name: Checkout current Korean translation
-        uses: actions/checkout@v4
-        with:
-          ref: korean-localization
-          path: translation-source
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -45,24 +40,55 @@ jobs:
         working-directory: Wiz7_Patching_Utilities/KoreanFontTools
         run: |
           python build_korean_font.py build \
-            ../../translation-source/korean/MSGHDR_indexText.ko.txt \
-            ../../translation-source/korean/segments \
+            ../../korean/MSGHDR_indexText.ko.txt \
+            ../../korean/segments \
             --reserve-low-through 279 \
             --bdf "$RUNNER_TEMP/Galmuri11.bdf" \
             --out ../../build/psx-korean-font
 
       - name: Build merged Korean MSG source
-        working-directory: translation-source
         run: python korean/tools/build_msghdr_overlay.py
 
       - name: Audit merged MSG with native two-byte Hangul
         working-directory: Wiz7_Patching_Utilities/KoreanFontTools
         run: |
           python audit_native_msg_limits.py \
-            --input ../../translation-source/korean/build/MSGHDR_indexText.ko.merged.txt \
+            --input ../../korean/build/MSGHDR_indexText.ko.merged.txt \
             --mapping ../../build/psx-korean-font/korean_dbcs.tsv \
             --output ../../build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt \
             --tsv ../../build/psx-korean-font/native_msg_lengths.tsv
+
+      - name: Cross-check font and MSG native codepages
+        run: |
+          python - <<'PY'
+          import csv
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path('korean/tools').resolve()))
+          from native_psx_codepage import allocate_native_mapping
+
+          mapping_path = Path('build/psx-korean-font/korean_dbcs.tsv')
+          rows = list(csv.DictReader(mapping_path.open(encoding='utf-8'), delimiter='\t'))
+          chars = [r['char'] for r in rows]
+          expected = allocate_native_mapping(chars)
+
+          mismatches = []
+          for row in rows:
+              ch = row['char']
+              got_code = row['code_hex'].upper().replace('0X', '')
+              got_slot = int(row['slot'])
+              exp = expected[ch]
+              exp_code = f'{exp.lead:02X}{exp.trail:02X}'
+              if got_code != exp_code or got_slot != exp.slot:
+                  mismatches.append((ch, got_code, got_slot, exp_code, exp.slot))
+
+          if mismatches:
+              for item in mismatches[:20]:
+                  print('MAPPING_MISMATCH', item)
+              raise SystemExit(f'{len(mismatches)} font/MSG native mapping mismatch(es)')
+          print(f'NATIVE_CODEPAGE_PARITY_OK entries={len(rows)}')
+          PY
 
       - name: Print build summary
         run: |
