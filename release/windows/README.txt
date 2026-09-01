@@ -1,4 +1,4 @@
-Wizardry VII PS1 한국어 자동 패처 v3
+Wizardry VII PS1 한국어 자동 패처 v6
 ====================================
 
 지원 입력
@@ -19,21 +19,25 @@ DuckStation
 - CHD 입력: Wizardry7_PSX_KOR.chd를 바로 실행
 - BIN 입력: Wizardry7_PSX_KOR.cue를 실행
 
-v3 변경점
-- 실제 PS1 출력에서 확인된 FONT.MMT 논리 비트플레인 순서 수정
-  (0/2번 논리 글리프가 서로 바뀌어 보이던 한글 깨짐 수정)
-- Gertius WIZ7_PSX_ENG V1.0 전체 변경을 베이스로 통합
-- 아직 한국어화하지 않은 PS1 전용 일본어 메뉴/영상/관련 자산은 영문화판 자산 유지
-- 영문판 SCENARIJ.DBS 이벤트/스크립트 수정을 보존하면서 아이템/몬스터 이름만 한국어로 병합
+v6 핵심 변경점
+- FONT.MMT 실제 저장 슬롯 = 렌더러 글리프 - 4 규칙 반영
+- FONT.MMT 비트플레인 순서를 원래 0,1,2,3으로 복구
+- Galmuri11을 1픽셀 왼쪽으로 배치해 모든 ㅏ가 ㅣ처럼 보이던 현상 수정
+- Gertius WIZ7_PSX_ENG V1.0 디스크 배치를 기준으로 유지
+- 한국어 MSGJ.DBS/HDR을 영문판 파일 크기까지 안전 패딩해 이후 파일 LBA가 이동하지 않도록 수정
+- PCFILE.을 영문판과 동일한 LBA 742에 유지
+- 캐릭터 생성/정보창의 고정폭 1바이트 UI는 우선 영어 ASCII 폴백
+  (종족/직업/성별, LVL/RNK/EXP, 능력치 라벨, 직업 등급명)
+- 한국어 본문/메뉴/아이템/몬스터는 유지
 
 검증 원본 raw BIN MD5
 188d3ee5a2a2242a719f290ea595e5ec
 
-검증 한국어 v3 BIN MD5
-7b94f5ccb6cfcbd0c87a856d8c60056a
+검증 한국어 v6 BIN MD5
+38045b4a8629343c32b090f4f837ba7e
 
-검증 한국어 v3 BIN SHA-256
-80781023cae9e3c96d72f4d090995931f1f8df0f87bb40ff2eaf200827eb38f9
+검증 한국어 v6 BIN SHA-256
+a531ca24bb0d70ed7989dfe72a9fb571706176a36165fd392fb07a649db3c342
 
 동작 방식
 - BIN: xdelta3로 직접 패치
