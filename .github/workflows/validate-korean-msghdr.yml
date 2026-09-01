@@ -31,9 +31,9 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Run Korean runtime unit tests
+      - name: Run Korean runtime and disc-build unit tests
         working-directory: korean/tools
-        run: python -m unittest -v test_korean_psx_runtime.py
+        run: python -m unittest -v test_korean_psx_runtime.py test_build_korean_psx_disc.py
 
       - name: Validate Korean overlays
         shell: bash
