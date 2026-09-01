@@ -7,11 +7,13 @@ on:
     paths:
       - 'MSGHDR_indexText.txt'
       - 'korean/**'
+      - 'Assembler Injects/KoreanLineBreak16char.c'
       - '.github/workflows/validate-korean-msghdr.yml'
   pull_request:
     paths:
       - 'MSGHDR_indexText.txt'
       - 'korean/**'
+      - 'Assembler Injects/KoreanLineBreak16char.c'
       - '.github/workflows/validate-korean-msghdr.yml'
 
 permissions:
@@ -28,6 +30,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Run Korean runtime unit tests
+        working-directory: korean/tools
+        run: python -m unittest -v test_korean_psx_runtime.py
 
       - name: Validate Korean overlays
         shell: bash
@@ -75,6 +81,16 @@ jobs:
           print(f'NATIVE_MAPPING_OK entries={len(rows)} slots={min(slots) if slots else 0}..{max(slots) if slots else 0}')
           PY
 
+      - name: Audit DBCS-aware 16-glyph line wrapping
+        shell: bash
+        run: |
+          python korean/tools/audit_korean_linebreaks.py \
+            --input korean/build/MSGHDR_indexText.ko.merged.txt \
+            --mapping korean/build/MSGHDR_native_hangul_map.tsv \
+            --output korean/build/KOREAN_LINEBREAK_REPORT.txt
+          echo
+          cat korean/build/KOREAN_LINEBREAK_REPORT.txt
+
       - name: Upload validation outputs
         uses: actions/upload-artifact@v4
         with:
@@ -84,6 +100,7 @@ jobs:
             korean/build/MSGHDR_validation_report.txt
             korean/build/MSGHDR_charset_report.txt
             korean/build/MSGHDR_native_hangul_map.tsv
+            korean/build/KOREAN_LINEBREAK_REPORT.txt
             korean/build/psx-native/MISCJ.HDR
             korean/build/psx-native/MSGJ.HDR
             korean/build/psx-native/MSGJ.DBS
