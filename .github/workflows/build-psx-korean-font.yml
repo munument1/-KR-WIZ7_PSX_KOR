@@ -51,9 +51,24 @@ jobs:
             --bdf "$RUNNER_TEMP/Galmuri11.bdf" \
             --out ../../build/psx-korean-font
 
+      - name: Build merged Korean MSG source
+        working-directory: translation-source
+        run: python korean/tools/build_msghdr_overlay.py
+
+      - name: Audit merged MSG with native two-byte Hangul
+        working-directory: Wiz7_Patching_Utilities/KoreanFontTools
+        run: |
+          python audit_native_msg_limits.py \
+            --input ../../translation-source/korean/build/MSGHDR_indexText.ko.merged.txt \
+            --mapping ../../build/psx-korean-font/korean_dbcs.tsv \
+            --output ../../build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt \
+            --tsv ../../build/psx-korean-font/native_msg_lengths.tsv
+
       - name: Print build summary
         run: |
           cat build/psx-korean-font/build_info.json
+          echo
+          cat build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt
           python - <<'PY'
           from pathlib import Path
           chars = Path('build/psx-korean-font/charset.txt').read_text(encoding='utf-8').strip()
@@ -73,5 +88,7 @@ jobs:
             build/psx-korean-font/build_info.json
             build/psx-korean-font/korean_glyphs.bin
             build/psx-korean-font/korean_glyphs.tsv
+            build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt
+            build/psx-korean-font/native_msg_lengths.tsv
           if-no-files-found: error
           retention-days: 30
