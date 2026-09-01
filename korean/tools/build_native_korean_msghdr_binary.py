@@ -219,6 +219,8 @@ def decode_huffman_record(record: bytes, table: bytes) -> bytes:
         raise RuntimeError(
             f"Huffman record size mismatch: header={following + 1} actual={len(record)}"
         )
+    if decoded_length == 0:
+        return b""
 
     out = bytearray()
     node = 0
