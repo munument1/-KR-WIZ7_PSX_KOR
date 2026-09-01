@@ -8,12 +8,16 @@ on:
       - 'MSGHDR_indexText.txt'
       - 'korean/**'
       - 'Assembler Injects/KoreanLineBreak16char.c'
+      - 'Wiz7_Patching_Utilities/KoreanFontTools/scenario_name_patcher.py'
+      - 'Wiz7_Patching_Utilities/KoreanFontTools/test_scenario_name_patcher.py'
       - '.github/workflows/validate-korean-msghdr.yml'
   pull_request:
     paths:
       - 'MSGHDR_indexText.txt'
       - 'korean/**'
       - 'Assembler Injects/KoreanLineBreak16char.c'
+      - 'Wiz7_Patching_Utilities/KoreanFontTools/scenario_name_patcher.py'
+      - 'Wiz7_Patching_Utilities/KoreanFontTools/test_scenario_name_patcher.py'
       - '.github/workflows/validate-korean-msghdr.yml'
 
 permissions:
@@ -31,9 +35,17 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Run Korean runtime and disc-build unit tests
+      - name: Run Korean runtime, shared-codepage and disc-build unit tests
         working-directory: korean/tools
-        run: python -m unittest -v test_korean_psx_runtime.py test_build_korean_psx_disc.py
+        run: >-
+          python -m unittest -v
+          test_korean_psx_runtime.py
+          test_build_korean_psx_disc.py
+          test_shared_psx_codepage.py
+
+      - name: Run SCENARIJ fixed-field patch tests
+        working-directory: Wiz7_Patching_Utilities/KoreanFontTools
+        run: python -m unittest -v test_scenario_name_patcher.py
 
       - name: Validate Korean overlays
         shell: bash
@@ -55,10 +67,12 @@ jobs:
           echo
           sed -n '1,12p' korean/build/MSGHDR_charset_report.txt
 
-      - name: Build native Korean PSX MSG binaries
+      - name: Build native Korean PSX MSG binaries with shared asset codepage
         shell: bash
         run: |
-          python korean/tools/build_native_korean_msghdr_binary.py
+          python korean/tools/build_native_korean_msghdr_shared.py \
+            --extra-charset korean/scenario/items.ko.tsv \
+            --extra-charset korean/scenario/monsters.ko.tsv
           echo
           cat korean/build/psx-native/BUILD_REPORT.txt
 
