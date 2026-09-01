@@ -38,7 +38,7 @@
 
 - monster 201 `EARTH GOLEM` / `EARTH GOLEMS`: `헬라 에이스` → `대지 골렘`
 - item 248 `WHITE BEAR`: `흰구슬` 계열 오역 → `고무/흰곰`
-- item 564 `SPOTTED WHITE BALL`: `흰콩` 오역 → `점박이/흰공`
+- item 564 `FRECKLED/WHITE BALL`: `흰콩` 오역 → `점박이/흰공`
 - Gold 원문 필드에서 잘린 `+1`, `+2`, `(U)/(L)` 및 여러 고유명사 뒷부분 복원
 
 ## 공용 코드표/빌드 검증
