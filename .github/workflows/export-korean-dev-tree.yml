@@ -1,0 +1,29 @@
+name: Export Korean dev tree
+
+on:
+  push:
+    branches: [korean-localization]
+    paths:
+      - '.github/workflows/export-korean-dev-tree.yml'
+  workflow_dispatch:
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package source-only development tree
+        run: |
+          mkdir export
+          cp -a korean export/
+          mkdir -p export/Wiz7_Patching_Utilities
+          cp -a Wiz7_Patching_Utilities/KoreanFontTools export/Wiz7_Patching_Utilities/
+          cp -a release export/
+          cp README.md export/
+          cp MSGHDR_indexText.txt export/
+          cp MSGHDRJ_indexText.txt export/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: korean-dev-tree
+          path: export
+          if-no-files-found: error
