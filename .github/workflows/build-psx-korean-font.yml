@@ -1,0 +1,94 @@
+name: Build PSX Korean Font Assets
+
+on:
+  push:
+    branches:
+      - feat/korean-font-pipeline
+    paths:
+      - '.github/workflows/build-psx-korean-font.yml'
+      - 'Wiz7_Patching_Utilities/KoreanFontTools/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-font-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout font tooling
+        uses: actions/checkout@v4
+
+      - name: Checkout current Korean translation
+        uses: actions/checkout@v4
+        with:
+          ref: korean-localization
+          path: translation-source
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run font-tool unit tests
+        working-directory: Wiz7_Patching_Utilities/KoreanFontTools
+        run: python -m unittest -v
+
+      - name: Download pinned Galmuri11 BDF
+        run: |
+          curl --fail --location --retry 3 \
+            https://raw.githubusercontent.com/quiple/galmuri/v2.40.4/dist/Galmuri11.bdf \
+            --output "$RUNNER_TEMP/Galmuri11.bdf"
+          test -s "$RUNNER_TEMP/Galmuri11.bdf"
+
+      - name: Build current Korean charset and native PSX glyph assets
+        working-directory: Wiz7_Patching_Utilities/KoreanFontTools
+        run: |
+          python build_korean_font.py build \
+            ../../translation-source/korean/MSGHDR_indexText.ko.txt \
+            ../../translation-source/korean/segments \
+            --reserve-low-through 279 \
+            --bdf "$RUNNER_TEMP/Galmuri11.bdf" \
+            --out ../../build/psx-korean-font
+
+      - name: Build merged Korean MSG source
+        working-directory: translation-source
+        run: python korean/tools/build_msghdr_overlay.py
+
+      - name: Audit merged MSG with native two-byte Hangul
+        working-directory: Wiz7_Patching_Utilities/KoreanFontTools
+        run: |
+          python audit_native_msg_limits.py \
+            --input ../../translation-source/korean/build/MSGHDR_indexText.ko.merged.txt \
+            --mapping ../../build/psx-korean-font/korean_dbcs.tsv \
+            --output ../../build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt \
+            --tsv ../../build/psx-korean-font/native_msg_lengths.tsv
+
+      - name: Print build summary
+        run: |
+          cat build/psx-korean-font/build_info.json
+          echo
+          cat build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt
+          python - <<'PY'
+          from pathlib import Path
+          chars = Path('build/psx-korean-font/charset.txt').read_text(encoding='utf-8').strip()
+          print(f'CURRENT_UNIQUE_HANGUL={len(chars)}')
+          print(f'CONSERVATIVE_FONT_CAPACITY={2048 - 280}')
+          print(f'HEADROOM={(2048 - 280) - len(chars)}')
+          PY
+          rm -rf build/psx-korean-font/.cache
+
+      - name: Upload generated font assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: wiz7-psx-korean-font-assets
+          path: |
+            build/psx-korean-font/charset.txt
+            build/psx-korean-font/korean_dbcs.tsv
+            build/psx-korean-font/build_info.json
+            build/psx-korean-font/korean_glyphs.bin
+            build/psx-korean-font/korean_glyphs.tsv
+            build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt
+            build/psx-korean-font/native_msg_lengths.tsv
+          if-no-files-found: error
+          retention-days: 30
