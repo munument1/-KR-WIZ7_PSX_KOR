@@ -386,8 +386,14 @@ def cmd_build(args: argparse.Namespace) -> int:
         raise ValueError("no Hangul characters found in inputs")
 
     reserved: set[int] = set()
+    if args.reserve_low_through is not None:
+        if not 0 <= args.reserve_low_through < NATIVE_GLYPH_COUNT:
+            raise ValueError(
+                f"--reserve-low-through must be 0..{NATIVE_GLYPH_COUNT - 1}"
+            )
+        reserved.update(range(args.reserve_low_through + 1))
     if args.zenkaku:
-        reserved = zenkaku_reserved_slots(Path(args.zenkaku))
+        reserved.update(zenkaku_reserved_slots(Path(args.zenkaku)))
     mapping = allocate_native_mapping(chars, reserved)
 
     (out_dir / "charset.txt").write_text("".join(chars) + "\n", encoding="utf-8")
@@ -397,6 +403,7 @@ def cmd_build(args: argparse.Namespace) -> int:
         "charset_size": len(chars),
         "font_slots": NATIVE_GLYPH_COUNT,
         "reserved_slots": len(reserved),
+        "reserve_low_through": args.reserve_low_through,
         "free_slots_after_reserve": NATIVE_GLYPH_COUNT - len(reserved),
         "lead_range": ["0x80", "0x8F"],
         "trail_ranges": ["0x30-0x6F", "0xA0-0xDF"],
@@ -461,6 +468,10 @@ def make_parser() -> argparse.ArgumentParser:
     b.add_argument("inputs", nargs="+", help="UTF-8/CP949 text files or directories")
     b.add_argument("--out", default="build/korean-font", help="output directory")
     b.add_argument("--zenkaku", help="original ZENKAKU.TBL; referenced slots are reserved")
+    b.add_argument(
+        "--reserve-low-through", type=int,
+        help="also reserve every FONT.MMT slot from 0 through N (useful for CI without game assets)",
+    )
     b.add_argument("--font", help="original FONT.MMT to patch")
     b.add_argument("--font-output", help="patched font output (default: <out>/FONT_KOR.MMT)")
     b.add_argument("--bdf", help="offline official Galmuri11.bdf (default: download automatically)")
