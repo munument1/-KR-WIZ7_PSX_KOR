@@ -7,16 +7,22 @@ FONT = Path('/mnt/data/wiz7_psx_core/FONT.MMT')
 
 
 class FontMMTTests(unittest.TestCase):
-    def test_renderer_logical_to_physical_plane_order(self):
-        # Four consecutive logical slots share one physical 16x12 cell.
-        # Runtime screenshots prove logical planes 0 and 2 are swapped in the
-        # CLUT/bitplane selection while 1 and 3 remain unchanged.
-        self.assertEqual(font_mmt.PHYSICAL_PLANE_BY_LOGICAL, (2, 1, 0, 3))
-        x, y, _ = font_mmt.glyph_origin(64)
-        self.assertEqual((x, y), (16 * 16, 3))
-        self.assertEqual(font_mmt.glyph_origin(64)[2], 2)
+    def test_renderer_bias_and_identity_planes(self):
+        # Original ZENKAKU maps ASCII 'A' to 80A5. The renderer computes glyph
+        # 69, while the original FONT.MMT bitmap for A is physical slot 65.
+        self.assertEqual(font_mmt.RENDERER_GLYPH_BIAS, 4)
+        self.assertEqual(font_mmt.renderer_glyph_to_font_slot(69), 65)
+        self.assertEqual(font_mmt.renderer_glyph_to_font_slot(68), 64)
+        self.assertEqual(font_mmt.renderer_glyph_to_font_slot(2047), 2043)
+        self.assertEqual(font_mmt.font_slot_to_renderer_glyph(65), 69)
+        with self.assertRaises(ValueError):
+            font_mmt.font_slot_to_renderer_glyph(2044)
+
+        # Raw FONT.MMT bitplanes are in natural 0,1,2,3 order.
+        x, y, plane = font_mmt.glyph_origin(64)
+        self.assertEqual((x, y, plane), (16 * 16, 3, 0))
         self.assertEqual(font_mmt.glyph_origin(65)[2], 1)
-        self.assertEqual(font_mmt.glyph_origin(66)[2], 0)
+        self.assertEqual(font_mmt.glyph_origin(66)[2], 2)
         self.assertEqual(font_mmt.glyph_origin(67)[2], 3)
 
     @unittest.skipUnless(FONT.exists(), 'PSX FONT.MMT fixture not present')
@@ -40,10 +46,20 @@ class FontMMTTests(unittest.TestCase):
         data = FONT.read_bytes()
         before = [font_mmt.extract_glyph(data, i) for i in (64, 66, 67)]
         blank = [0] * 11
-        modified = font_mmt.galmuri11_rows_to_mmt(data, 65, blank)
+        # Renderer glyph 69 maps to physical FONT.MMT slot 65.
+        modified = font_mmt.galmuri11_rows_to_mmt(data, 69, blank)
         after = [font_mmt.extract_glyph(modified, i) for i in (64, 66, 67)]
         self.assertEqual(before, after)
         self.assertFalse(any(font_mmt.extract_glyph(modified, 65)))
+
+    def test_legacy_x_offset_two_is_normalized(self):
+        # Older build scripts pass x_offset=2. It must be normalized to 1 so
+        # the rightmost Galmuri11 column (including the ㅏ arm) is not clipped.
+        blank_font = bytes(font_mmt.EXPECTED_SIZE)
+        rows = [1] * 11
+        a = font_mmt.galmuri11_rows_to_mmt(blank_font, 69, rows, x_offset=1)
+        b = font_mmt.galmuri11_rows_to_mmt(blank_font, 69, rows, x_offset=2)
+        self.assertEqual(a, b)
 
 
 if __name__ == '__main__':
