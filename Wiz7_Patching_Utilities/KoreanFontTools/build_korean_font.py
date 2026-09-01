@@ -2,17 +2,19 @@
 """Wizardry VII PSX Korean font/encoding preparation tool.
 
 This tool deliberately stops before packing glyphs into the game's native
-font storage. The PSX executable's FUN_ASCIItoZENKAKU routine already passes
+font storage.  The PSX executable's FUN_ASCIItoZENKAKU routine already passes
 0x80..0x9F lead-byte sequences through as two bytes; the exact downstream
 glyph-index mapping still needs to be verified from the game executable/assets.
 
-Outputs are reproducible intermediate assets:
+Outputs are therefore reproducible intermediate assets:
   * charset.txt          sorted Korean characters
   * korean_dbcs.tsv      Unicode <-> provisional two-byte code mapping
   * korean_glyphs.bin    11x11 glyph rows, 16-bit big-endian per row
   * korean_glyphs.tsv    glyph offsets/metrics
 
-Galmuri11 is NOT bundled. Point --bdf at the official Galmuri11.bdf file.
+Galmuri11 is not bundled. By default the tool downloads the official Galmuri11.bdf
+from quiple/galmuri and extracts the required bitmap glyphs itself. Use --bdf only
+when an offline/local copy should be used.
 """
 from __future__ import annotations
 
@@ -21,16 +23,16 @@ import csv
 import json
 import re
 import sys
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterator, List, Sequence, Tuple
+from typing import Dict, Iterable, Iterator, List, Sequence, Tuple
 
 HANGUL_RE = re.compile(r"[\u3131-\u318E\uAC00-\uD7A3]")
 DEFAULT_EXTS = {".txt", ".csv", ".tsv", ".md", ".json", ".xml", ".ini"}
 LEADS = tuple(range(0x80, 0xA0))
-# Conservative provisional trail set: printable-ish byte values, excluding 0x7F.
-# This is an allocation namespace only until the downstream renderer is verified.
 TRAILS = tuple(range(0x40, 0x7F)) + tuple(range(0x80, 0xFD))
+GALMURI11_BDF_URL = "https://raw.githubusercontent.com/quiple/galmuri/main/dist/Galmuri11.bdf"
 
 
 @dataclass(frozen=True)
@@ -106,6 +108,35 @@ def load_mapping(path: Path) -> Dict[str, Tuple[int, int]]:
     return mapping
 
 
+def obtain_galmuri11_bdf(local_bdf: str | None, cache_dir: Path) -> Path:
+    """Return a local Galmuri11 BDF path, downloading the official file if needed.
+
+    The font file is kept only as a local build cache and is not copied into the
+    repository or generated outputs.
+    """
+    if local_bdf:
+        path = Path(local_bdf)
+        if not path.is_file():
+            raise ValueError(f"Galmuri11 BDF not found: {path}")
+        return path
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    target = cache_dir / "Galmuri11.bdf"
+    if target.is_file() and target.stat().st_size > 0:
+        return target
+
+    try:
+        print(f"fetching Galmuri11 BDF: {GALMURI11_BDF_URL}")
+        urllib.request.urlretrieve(GALMURI11_BDF_URL, target)
+    except Exception as exc:
+        target.unlink(missing_ok=True)
+        raise OSError(
+            "could not download official Galmuri11.bdf; "
+            "retry with network access or pass --bdf /path/to/Galmuri11.bdf"
+        ) from exc
+    return target
+
+
 def parse_bdf(path: Path) -> Dict[int, Glyph]:
     glyphs: Dict[int, Glyph] = {}
     codepoint: int | None = None
@@ -151,7 +182,7 @@ def parse_bdf(path: Path) -> Dict[int, Glyph]:
             elif line.startswith("BBX "):
                 parts = line.split()
                 if len(parts) >= 5:
-                    bbx = tuple(map(int, parts[1:5]))  # type: ignore[assignment]
+                    bbx = tuple(map(int, parts[1:5]))
             elif line == "BITMAP":
                 bitmap_rows = []
                 in_bitmap = True
@@ -164,12 +195,6 @@ def parse_bdf(path: Path) -> Dict[int, Glyph]:
 
 
 def render_to_cell(glyph: Glyph, cell_w: int = 11, cell_h: int = 11) -> Tuple[int, ...]:
-    """Place a BDF glyph in an 11x11 logical cell without scaling.
-
-    This is deliberately an intermediate logical bitmap, not a claimed PS1
-    VRAM/font format. The native packer will be added only after the renderer's
-    two-byte-code -> glyph-index formula is verified.
-    """
     canvas = [0] * cell_h
     x0 = glyph.xoff
     y0 = cell_h - glyph.height - glyph.yoff
@@ -251,16 +276,17 @@ def cmd_build(args: argparse.Namespace) -> int:
     }
     (out_dir / "build_info.json").write_text(json.dumps(metadata, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    if args.bdf:
-        glyphs = parse_bdf(Path(args.bdf))
+    if not args.no_glyphs:
+        bdf_path = obtain_galmuri11_bdf(args.bdf, out_dir / ".cache")
+        glyphs = parse_bdf(bdf_path)
         emit_glyphs(out_dir, chars, mapping, glyphs)
 
     print(f"charset: {len(chars)} Hangul chars")
     print(f"mapping: {out_dir / 'korean_dbcs.tsv'}")
-    if args.bdf:
+    if not args.no_glyphs:
         print(f"glyphs:  {out_dir / 'korean_glyphs.bin'}")
     else:
-        print("glyphs:  skipped (pass --bdf Galmuri11.bdf)")
+        print("glyphs:  skipped (--no-glyphs)")
     return 0
 
 
@@ -277,10 +303,11 @@ def make_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Wiz7 PSX Korean DBCS/font preparation")
     sub = p.add_subparsers(dest="command", required=True)
 
-    b = sub.add_parser("build", help="scan translations, allocate DBCS, optionally extract BDF glyphs")
+    b = sub.add_parser("build", help="scan translations, allocate DBCS, and extract Galmuri11 bitmaps")
     b.add_argument("inputs", nargs="+", help="UTF-8/CP949 text files or directories")
     b.add_argument("--out", default="build/korean-font", help="output directory")
-    b.add_argument("--bdf", help="path to official Galmuri11.bdf")
+    b.add_argument("--bdf", help="offline path to official Galmuri11.bdf (default: download official BDF automatically)")
+    b.add_argument("--no-glyphs", action="store_true", help="only build charset/mapping; skip Galmuri11 bitmap extraction")
     b.add_argument("--extensions", default=",".join(sorted(DEFAULT_EXTS)), help="extensions scanned recursively")
     b.set_defaults(func=cmd_build)
 
