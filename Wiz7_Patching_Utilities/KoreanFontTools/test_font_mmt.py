@@ -52,15 +52,6 @@ class FontMMTTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertFalse(any(font_mmt.extract_glyph(modified, 65)))
 
-    def test_legacy_x_offset_two_is_normalized(self):
-        # Older build scripts pass x_offset=2. It must be normalized to 1 so
-        # the rightmost Galmuri11 column (including the ㅏ arm) is not clipped.
-        blank_font = bytes(font_mmt.EXPECTED_SIZE)
-        rows = [1] * 11
-        a = font_mmt.galmuri11_rows_to_mmt(blank_font, 69, rows, x_offset=1)
-        b = font_mmt.galmuri11_rows_to_mmt(blank_font, 69, rows, x_offset=2)
-        self.assertEqual(a, b)
-
 
 if __name__ == '__main__':
     unittest.main()

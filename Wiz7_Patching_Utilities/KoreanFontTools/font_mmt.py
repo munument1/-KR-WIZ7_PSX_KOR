@@ -171,8 +171,6 @@ def galmuri11_rows_to_mmt(
     x_offset=1 keeps all 11 columns visible.
     """
     # Compatibility with older callers whose CLI default was x_offset=2.
-    # Normalize that legacy value so existing build scripts also produce the
-    # corrected font until their CLI default is migrated to 1.
     if x_offset == 2:
         x_offset = 1
     slot = renderer_glyph_to_font_slot(renderer_glyph)

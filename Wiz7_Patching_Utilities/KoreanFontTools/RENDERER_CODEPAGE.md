@@ -1,100 +1,86 @@
-# PSX native font codepage reverse engineering
+# PSX native Korean codepage / FONT.MMT mapping
 
-## Result
+## Current verified result
 
-Wizardry VII PSX already has a 2-byte character path and its renderer maps a
-2-byte character directly into one of the 2048 logical `FONT.MMT` bitplanes.
-No custom glyph lookup table is required for Korean.
-
-## Entry path
-
-`FUN_ASCIItoZENKAKU` is at `0x8006CB80`.
-
-For input lead bytes `0x80..0x9F`, it copies two input bytes to the output
-unchanged. Relevant UI callers then pass that output into the normal text
-renderer (`0x80076F50` path).
-
-## Renderer disassembly
-
-At `0x80074FD4` the renderer reads the second byte after recognizing the lead.
-The decisive sequence is:
+Wizardry VII PSX already has a two-byte renderer path that can address 2048
+renderer glyph numbers. The byte-code calculation in `PSX.EXE` is:
 
 ```text
-80074FDC  sll   code, lead, 8
-80074FE0  addu  code, code, trail
-80074FE4  andi  tmp, code, 0x80
-80074FE8  beqz  tmp, low_trail
-80074FEC  andi  local, code, 0xff
-80074FF4  addiu local, local, -0x60
-80074FF8  addiu local, local, -0x30   # low-trail branch
-80074FFC  sra   tmp, code, 1
-80075000  andi  tmp, tmp, 0x1f80
-80075004  addu  glyph, local, tmp
-```
-
-For leads `0x80..0x8F`, `(code >> 1) & 0x1F80` is equivalent to
-`(lead - 0x80) * 128` in the 2048-slot font window.
-
-## Canonical native Korean code space
-
-```text
-lead 0x80..0x8F
-
+lead  0x80..0x8F
 trail 0x30..0x6F -> local 0..63
 trail 0xA0..0xDF -> local 64..127
 
-slot = (lead - 0x80) * 128 + local
+renderer_glyph = (lead - 0x80) * 128 + local
 ```
 
-Boundary examples:
+The important correction from the first Korean prototypes is that this renderer
+glyph number is **not** the physical `FONT.MMT` bitplane number.
 
-| Slot | Native code |
-| ---: | :--- |
-| 0 | 8030 |
-| 63 | 806F |
-| 64 | 80A0 |
-| 127 | 80DF |
-| 128 | 8130 |
-| 2047 | 8FDF |
+## Verified -4 FONT.MMT bias
 
-Every slot from 0 through 2047 has one deterministic canonical code.
-
-## FONT.MMT geometry connection
-
-The renderer subsequently uses:
+Cross-checking the original Japanese `ZENKAKU.TBL`, the renderer code and known
+ASCII glyphs proves a four-glyph bias:
 
 ```text
-plane = glyph & 3
-group = glyph >> 2
+physical_font_slot = renderer_glyph - 4
+renderer_glyph     = physical_font_slot + 4
 ```
 
-`FONT.MMT` has 512 physical 16x12 groups, each storing four logical glyphs as
-four bits of each 4bpp pixel. Thus `512 * 4 = 2048`, exactly matching the native
-code space above.
+Example:
+
+- ASCII `A` is converted by the original game to native code `80A5`.
+- The renderer formula yields glyph `69`.
+- The actual `A` bitmap in the untouched `FONT.MMT` is physical slot `65`.
+- Neighboring digits/letters follow the same offset continuously.
+
+Therefore Korean mapping TSV `slot` values are renderer glyph numbers, while
+font insertion must subtract 4 before selecting the physical bitplane.
+
+The highest safe renderer glyph is 2047, which writes physical slot 2043.
+Physical slots 2044..2047 are not reachable through this renderer window.
+
+## Physical FONT.MMT geometry
+
+`FONT.MMT` is an 8-byte wrapper around a TIM-like 1024x99 payload. The glyph
+area is arranged as 512 physical 16x12 cells, with four independent 1-bit glyphs
+stored in each cell's four nibble bits.
+
+```text
+physical_group = physical_slot // 4
+physical_plane = physical_slot & 3
+```
+
+The physical plane order is the natural `0,1,2,3` order. The earlier v3 theory
+that logical planes 0 and 2 were swapped was disproved by runtime testing and the
+known ASCII glyph audit.
+
+## Galmuri11 placement
+
+Korean glyphs are packed from Galmuri11 into the 16x12 physical cell. Runtime
+screenshots established that `x_offset=2` clips the rightmost Galmuri column.
+That column contains the short right arm of `ㅏ`, making every syllable with
+`ㅏ` appear as the corresponding `ㅣ` syllable (`가 -> 기`, `나 -> 니`, etc.).
+
+Production placement is:
+
+```text
+x_offset = 1
+y_offset = 0
+```
+
+`font_mmt.galmuri11_rows_to_mmt()` also normalizes the old x-offset 2 default to
+1 so older build callers cannot accidentally recreate that corruption.
 
 ## Reservation policy
 
-The current `ZENKAKU.TBL` is 404 bytes = 202 native code pairs. Applying the
-verified formula yields 198 unique valid font slots. The Korean builder reserves
-all of these by default when `--zenkaku` is supplied.
+The project continues to allocate Korean renderer glyphs from the high end down,
+while reserving the low region used by the original ASCII/Japanese conversion
+paths. The full PS1 build currently reserves renderer glyphs through 279 and
+uses one shared mapping for MSG, FONT and SCENARIO names.
 
-```text
-2048 total slots
--198 existing ZENKAKU targets
-=1850 available Korean slots
-```
+## Regression history
 
-This is deliberately conservative: it preserves every glyph that the existing
-ASCII/half-width conversion table may request. Korean glyphs are allocated from
-slot 2047 downward because the original assets are concentrated in the low banks.
-If the final Korean corpus ever exceeds 1850 unique glyphs, the reservation policy
-can be narrowed after auditing which legacy slots are still used.
-
-## Note about old A -> slot assumption
-
-An earlier visual POC associated ASCII `A`, ZENKAKU code `80A5`, and logical
-slot 65. The actual renderer formula maps `80A5` to slot 69. Therefore that old
-three-way association must not be used as codepage evidence. It likely reflects
-a mismatch between patched English assets/table expectations or the visual
-identification step. The mapping documented here comes directly from the real
-renderer instructions and is what the Korean pipeline now uses.
+- v1/v2: renderer glyph written directly to physical FONT slot -> four-slot shift.
+- v3: incorrect 0/2 plane-swap theory -> still corrupt.
+- v4: -4 physical-slot bias fixed -> most Hangul correct.
+- v5+: Galmuri x offset 2 -> 1 -> `ㅏ` right-arm clipping fixed.
