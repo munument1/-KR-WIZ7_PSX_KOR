@@ -49,19 +49,31 @@ jobs:
           echo
           sed -n '1,12p' korean/build/MSGHDR_charset_report.txt
 
-      - name: Estimate Korean bytecode and Huffman budget
+      - name: Build native Korean PSX MSG binaries
         shell: bash
         run: |
-          python korean/tools/plan_korean_bytecode.py
+          python korean/tools/build_native_korean_msghdr_binary.py
           echo
-          sed -n '1,40p' korean/build/MSGHDR_bytecode_plan.txt
+          cat korean/build/psx-native/BUILD_REPORT.txt
 
-      - name: Build Korean PSX MSG binaries
+      - name: Validate native mapping invariants
         shell: bash
         run: |
-          python korean/tools/build_korean_msghdr_binary.py
-          echo
-          cat korean/build/psx/BUILD_REPORT.txt
+          python - <<'PY'
+          import csv
+          from pathlib import Path
+          p = Path('korean/build/MSGHDR_native_hangul_map.tsv')
+          rows = list(csv.DictReader(p.open(encoding='utf-8'), delimiter='\t'))
+          codes = [r['code_hex'] for r in rows]
+          slots = [int(r['slot']) for r in rows]
+          assert len(codes) == len(set(codes)), 'duplicate native DBCS code'
+          assert len(slots) == len(set(slots)), 'duplicate FONT.MMT slot'
+          assert all(280 <= s <= 2047 for s in slots), 'mapping entered reserved low slots'
+          if slots:
+              assert max(slots) == 2047
+              assert min(slots) == 2048 - len(slots)
+          print(f'NATIVE_MAPPING_OK entries={len(rows)} slots={min(slots) if slots else 0}..{max(slots) if slots else 0}')
+          PY
 
       - name: Upload validation outputs
         uses: actions/upload-artifact@v4
@@ -71,9 +83,8 @@ jobs:
             korean/build/MSGHDR_indexText.ko.merged.txt
             korean/build/MSGHDR_validation_report.txt
             korean/build/MSGHDR_charset_report.txt
-            korean/build/MSGHDR_bytecode_plan.txt
-            korean/build/MSGHDR_hangul_map.tsv
-            korean/build/psx/MISCJ.HDR
-            korean/build/psx/MSGJ.HDR
-            korean/build/psx/MSGJ.DBS
-            korean/build/psx/BUILD_REPORT.txt
+            korean/build/MSGHDR_native_hangul_map.tsv
+            korean/build/psx-native/MISCJ.HDR
+            korean/build/psx-native/MSGJ.HDR
+            korean/build/psx-native/MSGJ.DBS
+            korean/build/psx-native/BUILD_REPORT.txt
