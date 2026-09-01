@@ -3,13 +3,22 @@
 **Wizardry VII: Crusaders of the Dark Savant** 일본 PS1판
 `Wizardry VII - Guardia no Houju (Japan)`을 한국어로 플레이하기 위한 ROM 해킹/현지화 프로젝트입니다.
 
-이 저장소는 [gertius1/WIZ7_PSX_ENG](https://github.com/gertius1/WIZ7_PSX_ENG)를 기반으로 하며,
-PS1판의 메시지 포맷, 폰트, 실행 파일 렌더러와 `SCENARIJ.DBS` 구조를 분석하여
-한국어 네이티브 2바이트 문자 코드를 사용하는 방향으로 확장하고 있습니다.
+이 프로젝트의 실제 제작 베이스는 **Gertius의 PS1 영문화 패치 `WIZ7_PSX_ENG V1.0`**입니다.
+DOS판이나 Wizardry Gold 실행 파일/UI 자산을 PS1판에 섞지 않습니다. Gold/DOS 데이터는 번역문 재활용과 대조 자료로만 사용합니다.
+
+```text
+검증된 일본 PS1판 BIN/CHD
+→ Gertius WIZ7_PSX_ENG V1.0 적용
+→ 검증된 PS1 영문판 파일시스템
+→ 한국어 MSG/FONT/EXE/SCENARIO 오버레이
+→ PS1 고정폭 UI 영문 안정화
+→ 한국어 타이틀 부제
+→ 최종 BIN/CUE/CHD 또는 일본판 기준 xdelta
+```
 
 > **현재 상태:** 개발/실기 테스트 단계  
-> 2026-09-01 기준 실제 원본 CHD → 한국어 BIN/CUE/CHD 전체 재빌드와 바이너리 무결성 검증을 완료했습니다.  
-> 다음 단계는 DuckStation 등 실제 실행 환경에서 플레이 테스트를 진행하는 것입니다.
+> 2026-09-02 기준 영문 PS1 패치를 완전 베이스로 한 v7 전체 디스크 재빌드와 xdelta/CHD 라운드트립 검증을 완료했습니다.  
+> 실제 플레이에서 남은 PS1 전용 UI/이벤트 문제를 계속 확인하고 있습니다.
 
 ---
 
@@ -17,28 +26,67 @@ PS1판의 메시지 포맷, 폰트, 실행 파일 렌더러와 `SCENARIJ.DBS` �
 
 - `MSGJ.DBS / MSGJ.HDR / MISCJ.HDR` 한국어 재인코딩
 - PS1 Huffman 재인코딩 및 라운드트립 검증
-- `FONT.MMT` 구조 분석 및 한국어 글리프 패킹
-- Galmuri BDF에서 필요한 글리프 자동 추출
+- `FONT.MMT` 구조 분석 및 Galmuri11 한국어 글리프 패킹
 - PS1 네이티브 DBCS 코드 자동 할당
-- `PSX.EXE` 한글 DBCS 렌더링/줄바꿈 런타임 패치
+- `PSX.EXE` 한글 DBCS 줄바꿈 런타임 패치
 - `SCENARIJ.DBS` 아이템 571개 이름 이식
 - `SCENARIJ.DBS` 몬스터 250개 × 4 이름 필드 이식
 - MSG / FONT / SCENARIO 공용 문자 매핑
-- CHD/BIN/CUE → 추출 → 한국어 파일 교체 → BIN/CUE/CHD 재빌드 파이프라인
+- Gertius PS1 영문화판의 `PCFILE.`, `SCENARIO.HDR`, `TALK.SCR`, 영상/오프닝 자산 보존
+- 캐릭터 생성/정보창의 1바이트 고정폭 UI를 PS1 영문 문자열로 안정화
+- 영문판 MSG 파일 크기/LBA 배치 보존
+- `TITL.MMT`의 일본어 부제 `ガーディアの宝珠`를 `가디아의 보주`로 교체
+- CHD/BIN/CUE 전체 재빌드 및 배포용 xdelta 생성
 - GitHub Actions 자동 검증
-- 배포용 xdelta 생성/라운드트립 검증
 
-## 공용 한글 코드표
+## 영문 PS1 베이스
 
-현재 빌드는 메시지, 폰트, 아이템/몬스터 이름이 서로 다른 코드표를 쓰지 않습니다.
+Gertius V1.0이 일본판 파일시스템에서 수정하는 파일은 정확히 12개입니다.
 
-- 최종 네이티브 한글 매핑: **1,133자**
-- `FONT.MMT` 사용 슬롯: **915..2047**
+```text
+CDS/D/MISCJ.HDR
+CDS/D/MSGJ.DBS
+CDS/D/MSGJ.HDR
+CDS/D/PCFILE.
+CDS/D/SCENARIJ.DBS
+CDS/D/SCENARIO.HDR
+CDS/D/TALK.SCR
+CDS/M/BOOK.STR
+CDS/M/OPEN.STR
+CDS/M/OPEN.TXT
+CDS/S1/AD.XA
+PSX.EXE
+```
+
+v7은 이 영문판을 먼저 만든 뒤 한국어 파일만 덮습니다. 따라서 PS1 전용 메뉴/영상/기본 캐릭터/스크립트는 영문판 수정본을 그대로 유지합니다.
+
+상세 감사 기록:
+
+- [`docs/PSX_ENGLISH_BASE_AUDIT_2026-09-02.md`](docs/PSX_ENGLISH_BASE_AUDIT_2026-09-02.md)
+
+---
+
+## 공용 한글 코드표 / 폰트
+
+메시지, 폰트, 아이템/몬스터 이름은 하나의 공용 문자 매핑을 사용합니다.
+
+- 네이티브 한글 매핑: **1,133자**
+- 사용 렌더러 글리프 범위: **915..2047**
+- 실제 `FONT.MMT` 물리 슬롯: **렌더러 글리프 - 4**
+- 물리 비트플레인 순서: **0,1,2,3**
+- Galmuri11 배치: **x=1, y=0**
 - 메시지 Huffman 라운드트립 실패: **0**
 - PS1 네이티브 메시지 255바이트 초과: **0**
 
-번역을 추가하여 새 한글 문자가 필요해지면 빌드 과정에서 공용 문자셋과 폰트가 함께 다시 생성됩니다.
-사용자가 폰트 파일을 수동으로 분해하거나 글리프를 직접 넣을 필요는 없습니다.
+초기 테스트에서 확인된 주요 폰트 오류도 빌드 규칙에 반영했습니다.
+
+- 렌더러 글리프를 물리 슬롯에 그대로 쓰던 4슬롯 오프셋 오류 수정
+- 잘못 추정했던 0/2 비트플레인 교환 폐기
+- Galmuri11 오른쪽 끝이 잘려 모든 `ㅏ`가 `ㅣ`처럼 보이던 문제 수정
+
+자세한 구조:
+
+- [`Wiz7_Patching_Utilities/KoreanFontTools/RENDERER_CODEPAGE.md`](Wiz7_Patching_Utilities/KoreanFontTools/RENDERER_CODEPAGE.md)
 
 ---
 
@@ -56,106 +104,135 @@ PS1판의 메시지 포맷, 폰트, 실행 파일 렌더러와 `SCENARIJ.DBS` �
 - MD5: `87234265e920cf6a2e4d5426d39f6561`
 - SHA-256: `a1d45439c8e38e9a9c106c7735d725f79a22596497ce0690442a8e33c1ecf4b0`
 
-CHD 컨테이너 해시는 변환 도구/압축 방식에 따라 달라질 수 있으므로,
-최종 판정은 CHD에서 복원한 raw BIN의 MD5/CRC32를 기준으로 합니다.
+CHD 컨테이너 해시는 압축 방식에 따라 달라질 수 있으므로 최종 판정은 CHD에서 복원한 raw BIN의 MD5/CRC32로 합니다.
 
-이 저장소에는 원본 게임 BIN/CHD 또는 추출된 저작권 게임 파일을 포함하지 않습니다.
+### Gertius PS1 영문패치 V1.0 적용 결과
 
----
+- MD5: `7fb464147ab7144facae337226c91aa5`
+- SHA-256: `6d61aaccf5a21853077f96b66e5fea4a2859611d89b5a93358e79d2f504c1683`
 
-## 테스트용 xdelta 적용 방식
-
-정식 릴리스에서는 전체 게임 이미지를 배포하지 않고 **xdelta 패치** 방식으로 제공할 예정입니다.
-
-원본 raw BIN을 준비한 뒤 일반적인 xdelta3 사용법은 다음과 같습니다.
-
-```bash
-xdelta3 -d -s source.bin Wizardry7_PSX_KOR.xdelta Wizardry7_PSX_KOR.bin
-```
-
-2026-09-01 내부 검증 테스트 빌드의 한국어 BIN은 다음 결과를 냈습니다.
-
-- MD5: `656bdf3fb384efbd5733da6d68c3fa99`
-- SHA-256: `9867c85b48514c1ba61c3e47b19ad09b8a8179d79cf7807a2b9fb676d4649d6d`
-- 크기: `324503088` bytes
-- 섹터: `137969`
-- 트랙: `MODE2/2352`, 1 track
-
-상세 검증 기록:
-
-- [`docs/PSX_FULL_DISC_BUILD_VERIFICATION_2026-09-01.md`](docs/PSX_FULL_DISC_BUILD_VERIFICATION_2026-09-01.md)
+이 저장소에는 원본 게임 BIN/CHD 또는 추출된 게임 파일을 포함하지 않습니다.
 
 ---
 
-## 개발 빌드: CHD/BIN에서 직접 한국어판 만들기
+## v7 테스트 빌드
 
-전체 개발 빌드는 사용자 보유 원본 이미지에서 직접 한국어 BIN/CUE를 생성합니다.
+최종 v7 raw BIN:
 
-핵심 스크립트:
+- MD5: `381cf7ff7509f35b5fbc423791ed689d`
+- SHA-256: `7dc0fb63ccd4565542e07c134881d54c4faa84c7145b73c67d6d5708f5d67df1`
+
+v7 xdelta:
+
+- SHA-256: `b421320fa47264b185be5e8fb95417d639e656cd0a52750f4cbeb61edd0f896a`
+
+검증 완료 항목:
+
+1. 일본판 원본 BIN → v7 xdelta → v7 BIN 바이트 단위 동일
+2. v7 BIN → CHD → BIN 바이트 단위 동일
+3. `chdman verify` raw/overall SHA1 성공
+4. PS1 영문패치 파일시스템 대비 정확히 7개 의도한 파일만 변경
+5. 나머지 Gertius 영문 PS1 자산은 바이트 단위 동일
+
+영문 PS1판 대비 v7 변경 파일:
 
 ```text
-korean/tools/build_korean_psx_disc_full.py
+CDS/D/MISCJ.HDR
+CDS/D/MSGJ.DBS
+CDS/D/MSGJ.HDR
+CDS/D/SCENARIJ.DBS
+CDS/T/FONT.MMT
+CDS/T/TITL.MMT
+PSX.EXE
+```
+
+---
+
+## 캐릭터 생성/정보창 고정폭 UI
+
+PS1판의 일부 캐릭터 정보 UI는 2바이트 DBCS 문자열을 안전하게 처리하지 못합니다. 이 경로에 한글을 직접 넣으면 단어 누락이나 화면 하단으로 깨진 글자가 흘러나오는 현상이 발생했습니다.
+
+현재는 안정성을 위해 아래 범위를 **Gertius PS1 영문판 ASCII 문자열**로 되돌립니다.
+
+- 100..110: 종족
+- 120..134: 직업
+- 140..141: 성별
+- 160..162: 패드/버튼 안내
+- 200..219: LVL/RNK/EXP/능력치/상태 라벨
+- 800..937: 직업 등급명
+
+이 부분은 추후 해당 렌더링 루틴을 DBCS 안전하게 패치한 뒤 한국어화할 수 있습니다.
+
+또한 한국어 MSG 파일은 영문판과 동일한 파일 크기로 안전 패딩해 후속 파일 LBA를 유지합니다. 이 때문에 `PCFILE.`을 포함한 PS1 영문판 데이터 배치가 이동하지 않습니다.
+
+---
+
+## 개발 빌드
+
+현재 권장 생산 빌더는 다음 파일입니다.
+
+```text
+korean/tools/build_korean_psx_disc_english_base.py
 ```
 
 필요 도구:
 
 - Python 3
-- `chdman` — CHD 입력/출력 사용 시
+- `xdelta3`
 - `dumpsxiso`
 - `mkpsxiso`
+- `chdman` — CHD 입력/출력 사용 시
+- Gertius `WIZ7_PSX_ENG V1.0`의 `Wiz7_patch.xdelta`
 
 예:
 
 ```bash
-python korean/tools/build_korean_psx_disc_full.py \
+python korean/tools/build_korean_psx_disc_english_base.py \
   "/path/to/Wizardry VII - Guardia no Houju (Japan).chd" \
+  --upstream-english-xdelta "/path/to/Wiz7_patch.xdelta" \
   --output-bin build/Wizardry7_PSX_KOR.bin \
   --output-cue build/Wizardry7_PSX_KOR.cue \
-  --output-chd build/Wizardry7_PSX_KOR.chd
+  --output-chd build/Wizardry7_PSX_KOR.chd \
+  --output-xdelta build/Wizardry7_PSX_KOR.xdelta
 ```
 
-빌더는 다음 작업을 자동으로 수행합니다.
+빌드 순서:
 
 ```text
-CHD/BIN/CUE
-→ 원본 검증
-→ 전체 PS1 파일시스템 추출
-→ 번역 메시지 병합
-→ 공용 DBCS 문자표 생성
-→ MSGJ/MISCJ 재빌드
-→ Galmuri 글리프 추출 및 FONT.MMT 패치
-→ PSX.EXE 패치
-→ SCENARIJ.DBS 아이템/몬스터 이름 패치
-→ BIN/CUE 재빌드
-→ 선택적으로 CHD 생성
+일본 PS1 원본 검증
+→ Gertius PS1 영문 xdelta 적용
+→ 영문 BIN 해시 검증
+→ 영문 PS1 파일시스템 추출
+→ 한국어 메시지 + 공용 코드표 생성
+→ 한국어 FONT.MMT 생성
+→ 영문 PSX.EXE에 한국어 런타임 패치 병합
+→ 영문 SCENARIJ.DBS에 한국어 아이템/몬스터 이름 병합
+→ 고정폭 UI 영문 안정화
+→ MSG 크기/LBA를 영문판과 동일하게 유지
+→ TITL.MMT 부제를 "가디아의 보주"로 교체
+→ BIN/CUE/CHD 재빌드
+→ 일본판 원본 기준 최종 xdelta 생성 및 라운드트립 검증
 ```
 
-Galmuri BDF를 사용자가 따로 준비하지 않은 경우 폰트 빌드 도구가 필요한 소스를 자동으로 처리합니다.
-
-CI에서 사용하는 PS1 디스크 도구 체인은 다음 워크플로로 재현할 수 있습니다.
+CI 도구 체인:
 
 ```text
 .github/workflows/build-psx-toolchain.yml
+.github/workflows/build-windows-patcher-tools.yml
 ```
 
 ---
 
 ## Scenario 번역
 
-Gold판에서 작업된 Scenario 번역을 PS1판에 이식했습니다.
+Gold판에서 작업된 Scenario **번역문**을 PS1 구조에 맞춰 이식했습니다. Gold판 바이너리/UI를 사용한 것이 아닙니다.
 
 - 아이템: 571 ID
 - 몬스터: 250 ID × 4 이름 필드
 - DOS ↔ PS1 ID 대응 불일치: 0
 - PS1 고정 필드 길이 초과: 0
 
-재현용 도구:
-
-```text
-korean/tools/import_gold_scenario_translations.py
-```
-
-최종 데이터:
+데이터:
 
 ```text
 korean/scenario/items.ko.tsv
@@ -169,47 +246,19 @@ korean/scenario/gold_import_overrides.tsv
 
 ---
 
-## 실제 전체 디스크 검증 결과
+## 남은 실제 플레이 QA
 
-2026-09-01에 실제 기준 CHD로 다음을 확인했습니다.
+바이너리/파일시스템 검증은 통과했지만 에뮬레이터 실기 테스트는 계속 필요합니다. 특히 다음 항목을 우선 확인합니다.
 
-1. CHD에서 복원한 BIN이 기준 MD5/CRC32와 정확히 일치
-2. 무수정 `dumpsxiso → mkpsxiso` 재빌드가 원본 BIN과 **바이트 단위 100% 동일**
-3. 한국어판에서 의도한 6개 디스크 파일만 변경
-4. 재추출한 나머지 게임 파일 내용은 모두 원본과 동일
-5. 한국어 BIN → CHD → BIN 왕복 결과가 바이트 단위 동일
-6. 원본 BIN → xdelta → 한국어 BIN 결과가 바이트 단위 동일
+- 기본 캐릭터 이름이 영문 PS1판처럼 표시되는지
+- 캐릭터 정보창 하단의 깨진 글자 스트림이 사라졌는지
+- 고정폭 UI의 종족/직업/능력치 라벨이 영어로 안정적으로 나오는지
+- 타이틀 화면 부제가 `가디아의 보주`로 표시되는지
+- 초반 이벤트/NPC/초상화가 영문 PS1판과 동일하게 진행되는지
+- 한국어 본문/아이템/몬스터/전투 메시지
+- 저장/불러오기 및 장시간 진행 안정성
 
-변경되는 디스크 파일:
-
-```text
-PSX.EXE
-CDS/D/MISCJ.HDR
-CDS/D/MSGJ.HDR
-CDS/D/MSGJ.DBS
-CDS/D/SCENARIJ.DBS
-CDS/T/FONT.MMT
-```
-
----
-
-## 남은 테스트
-
-바이너리 구조 검증은 완료했지만 실제 게임 플레이 테스트는 계속 필요합니다.
-
-우선 확인할 항목:
-
-- 게임 부팅 및 새 게임 시작
-- 초반 던전/이벤트 진행
-- NPC 대사 및 선택지
-- 아이템/몬스터 이름
-- 전투 메시지
-- 줄바꿈과 텍스트 박스 넘침
-- 메뉴/UI에서의 한글 표시
-- 저장/불러오기
-- 장시간 진행 시 안정성
-
-문제가 확인되면 재현 위치와 화면을 GitHub Issue에 남겨 주세요.
+문제가 확인되면 재현 위치와 스크린샷을 GitHub Issue에 남겨 주세요.
 
 ---
 
@@ -218,9 +267,10 @@ CDS/T/FONT.MMT
 ```text
 korean/
   scenario/        아이템/몬스터 한국어 이름 및 검증 기록
-  tools/           메시지/디스크/EXE 빌드 도구
+  tools/           메시지/디스크/EXE/영문베이스 빌드 도구
 Wiz7_Patching_Utilities/
   KoreanFontTools/ PS1 폰트/Scenario 패치 도구
+release/windows/   CHD/BIN 자동 패처 스크립트
 .github/workflows/ 자동 검증 및 PS1 도구 체인
 ```
 
@@ -236,4 +286,4 @@ Wiz7_Patching_Utilities/
 - MAME `chdman` 개발자들
 - Galmuri 프로젝트
 
-원 프로젝트가 구축한 PS1판 구조 분석과 영문화 작업이 없었다면 이 한국어화 작업도 훨씬 어려웠을 것입니다.
+Gertius가 구축한 PS1판 구조 분석과 영문화 작업이 이 한국어판의 실제 기반입니다.
