@@ -1,0 +1,24 @@
+target	id	field	translation	reason
+item	67	name	성전사/양손도끼+1	Gold 16자 원문에서 +1 잘림
+item	89	name	뿔 =/프로메테우스	PROMETHEUS 고유명사 완전 복원
+item	202	name	샤메일/더블릿+2	Gold 16자 원문에서 +2 잘림
+item	208	name	로브 =/마법(상)	(U) 상의 구분 복원
+item	209	name	로브 =/마법(하)	(L) 하의 구분 복원
+item	210	name	검은가운/=죽음(상)	(U) 상의 구분 복원
+item	211	name	검은가운/=죽음(하)	(L) 하의 구분 복원
+item	221	name	징퀴르/치마+2	Gold 16자 원문에서 +2 잘림
+item	246	name	발렌타인/목걸이	VALENTINE 고유명사 완전 복원
+item	248	name	고무/흰곰	WHITE BEAR를 흰구슬로 옮긴 명백한 오역 수정
+item	396	name	우유 =/마그마나시아	MAGMANASIA 고유명사 완전 복원
+item	398	name	비단/가운 (상)	닫는 괄호 복원
+item	399	name	비단/가운 (하)	닫는 괄호 복원
+item	425	name	편지 =/보어리가드	BOERIGARD 고유명사 완전 복원
+item	431	name	옛도시/통행증	불필요한 후행 공백 제거
+item	435	name	열쇠 =/고른 왕	한국어 어순 정리
+item	497	name	엘리시아드 =/신성	ELYSIAD 고유명사 완전 복원
+item	538	name	뱀의/고리	COIL OF THE SERPENT 의미가 드러나게 수정
+item	542	name	헬라조이드/깃발	HELAZOID 고유명사 완전 복원
+item	553	name	*아스트랄*/*도미네*	ASTRAL 표기 완전 복원
+item	564	name	점박이/흰공	WHITE BALL을 흰콩으로 옮긴 명백한 오역 수정
+monster	201	singular	대지 골렘	EARTH GOLEM이 헬라 에이스로 잘못 매칭된 명백한 오역 수정
+monster	201	plural	대지 골렘	EARTH GOLEMS가 헬라 에이스로 잘못 매칭된 명백한 오역 수정
