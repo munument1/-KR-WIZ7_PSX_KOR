@@ -45,11 +45,11 @@ jobs:
         working-directory: Wiz7_Patching_Utilities/KoreanFontTools
         run: |
           python build_korean_font.py build \
-            ../../../translation-source/korean/MSGHDR_indexText.ko.txt \
-            ../../../translation-source/korean/segments \
+            ../../translation-source/korean/MSGHDR_indexText.ko.txt \
+            ../../translation-source/korean/segments \
             --reserve-low-through 279 \
             --bdf "$RUNNER_TEMP/Galmuri11.bdf" \
-            --out ../../../build/psx-korean-font
+            --out ../../build/psx-korean-font
 
       - name: Print build summary
         run: |
