@@ -79,6 +79,13 @@ class ToolTests(unittest.TestCase):
         self.assertEqual((mapping['가'].lead, mapping['가'].trail), (0x8F, 0xDE))
         self.assertEqual(mapping['나'].slot, 2045)
 
+    def test_conservative_low_bank_reservation_capacity(self):
+        reserved = set(range(280))
+        mapping = kf.allocate_native_mapping(['가', '나'], reserved)
+        self.assertEqual(mapping['가'].slot, 2047)
+        self.assertEqual(mapping['나'].slot, 2046)
+        self.assertEqual(2048 - len(reserved), 1768)
+
     def test_encoder_keeps_ascii_and_expands_hangul(self):
         m = {'가': (0x80, 0x30)}
         self.assertEqual(kf.encode_text('A가!', m), b'A\x80\x30!')
