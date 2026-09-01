@@ -30,7 +30,8 @@ jobs:
           $exe = Get-ChildItem "$env:TEMP/xdelta" -Recurse -Filter xdelta3.exe | Select-Object -First 1
           if (-not $exe) { throw 'xdelta3.exe not found' }
           Copy-Item $exe.FullName 'out/xdelta3.exe'
-          & ./out/xdelta3.exe -h | Select-Object -First 5
+          & ./out/xdelta3.exe -V
+          if ($LASTEXITCODE -ne 0) { throw "xdelta3 self-check failed: $LASTEXITCODE" }
 
       - name: Hash tools
         shell: pwsh
