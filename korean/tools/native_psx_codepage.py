@@ -12,8 +12,8 @@ Canonical codes for the 2048-slot FONT.MMT are:
 
 For Korean we conservatively reserve slots 0..279 for the original Japanese /
 ASCII conversion assets and allocate Hangul from slot 2047 downward. Characters
-are sorted by Unicode code point so the mapping is deterministic and matches the
-font pipeline on feat/korean-font-pipeline.
+are sorted by Unicode code point so the mapping is deterministic and can be
+shared by MSGJ, FONT.MMT and fixed-field SCENARIJ.DBS name patches.
 """
 from __future__ import annotations
 
@@ -95,10 +95,30 @@ def slot_to_native_code(slot: int) -> tuple[int, int]:
     return lead, trail
 
 
+def inventory_from_text(text: str) -> collections.Counter[str]:
+    return collections.Counter(ch for ch in normalized_chars(text) if is_hangul(ch))
+
+
 def collect_inventory(records: Iterable[TextRecord]) -> collections.Counter[str]:
     freq: collections.Counter[str] = collections.Counter()
     for rec in records:
-        freq.update(ch for ch in normalized_chars(rec.text) if is_hangul(ch))
+        freq.update(inventory_from_text(rec.text))
+    return freq
+
+
+def collect_text_inventory(paths: Iterable[Path]) -> collections.Counter[str]:
+    """Collect Hangul from arbitrary UTF-8 text/CSV/TSV assets.
+
+    This is intentionally format-agnostic. Source English/Japanese columns do
+    not contain Hangul, while Korean translation columns do. Scanning the whole
+    file therefore keeps the shared codepage simple and deterministic.
+    """
+    freq: collections.Counter[str] = collections.Counter()
+    for path in paths:
+        if not path.is_file():
+            raise FileNotFoundError(path)
+        text = path.read_text(encoding="utf-8-sig", errors="strict")
+        freq.update(inventory_from_text(text))
     return freq
 
 
@@ -119,16 +139,19 @@ def allocate_native_mapping(chars: Iterable[str]) -> dict[str, NativeMapping]:
 
 def build_native_mapping(
     records: Iterable[TextRecord],
+    extra_text_paths: Iterable[Path] = (),
 ) -> tuple[dict[str, NativeMapping], collections.Counter[str]]:
     freq = collect_inventory(records)
+    freq.update(collect_text_inventory(extra_text_paths))
     return allocate_native_mapping(freq), freq
 
 
 def build_mapping(
     records: Iterable[TextRecord],
+    extra_text_paths: Iterable[Path] = (),
 ) -> tuple[dict[str, bytes], collections.Counter[str]]:
     """Compatibility shape used by the MSG Huffman builder."""
-    native, freq = build_native_mapping(records)
+    native, freq = build_native_mapping(records, extra_text_paths)
     return {ch: m.encoded for ch, m in native.items()}, freq
 
 
