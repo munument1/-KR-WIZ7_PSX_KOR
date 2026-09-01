@@ -41,6 +41,7 @@ jobs:
           python -m unittest -v
           test_korean_psx_runtime.py
           test_build_korean_psx_disc.py
+          test_build_korean_psx_disc_full.py
           test_shared_psx_codepage.py
 
       - name: Run SCENARIJ fixed-field patch tests
