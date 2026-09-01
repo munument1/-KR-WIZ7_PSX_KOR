@@ -1,0 +1,45 @@
+name: Build Windows Patcher Tools
+
+on:
+  push:
+    branches: [korean-localization]
+    paths:
+      - '.github/workflows/build-windows-patcher-tools.yml'
+  workflow_dispatch:
+
+jobs:
+  tools:
+    runs-on: windows-latest
+    steps:
+      - name: Download chdman
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          Invoke-WebRequest `
+            -Uri 'https://raw.githubusercontent.com/emmercm/chdman-js/main/packages/chdman-win32-x64/chdman.exe' `
+            -OutFile 'out/chdman.exe'
+          & ./out/chdman.exe -help | Select-Object -First 5
+
+      - name: Download xdelta3
+        shell: pwsh
+        run: |
+          Invoke-WebRequest `
+            -Uri 'https://github.com/jmacd/xdelta/releases/download/v3.2.0/xdelta3-3.2.0-windows-x86_64.zip' `
+            -OutFile "$env:TEMP/xdelta.zip"
+          Expand-Archive "$env:TEMP/xdelta.zip" "$env:TEMP/xdelta" -Force
+          $exe = Get-ChildItem "$env:TEMP/xdelta" -Recurse -Filter xdelta3.exe | Select-Object -First 1
+          if (-not $exe) { throw 'xdelta3.exe not found' }
+          Copy-Item $exe.FullName 'out/xdelta3.exe'
+          & ./out/xdelta3.exe -h | Select-Object -First 5
+
+      - name: Hash tools
+        shell: pwsh
+        run: |
+          Get-FileHash out/chdman.exe -Algorithm SHA256
+          Get-FileHash out/xdelta3.exe -Algorithm SHA256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-patcher-tools
+          path: out/
+          if-no-files-found: error
