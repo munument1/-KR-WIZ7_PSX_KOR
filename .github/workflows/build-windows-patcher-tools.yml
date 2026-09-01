@@ -5,12 +5,30 @@ on:
     branches: [korean-localization]
     paths:
       - '.github/workflows/build-windows-patcher-tools.yml'
+      - 'release/windows/**'
   workflow_dispatch:
 
 jobs:
   tools:
     runs-on: windows-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate patcher PowerShell syntax
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'release/windows/apply_patch.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List
+            throw "PowerShell syntax errors: $($errors.Count)"
+          }
+
       - name: Download chdman
         shell: pwsh
         run: |
