@@ -36,20 +36,50 @@ jobs:
             --output "$RUNNER_TEMP/Galmuri11.bdf"
           test -s "$RUNNER_TEMP/Galmuri11.bdf"
 
-      - name: Build current Korean charset and native PSX glyph assets
+      - name: Build merged Korean MSG source
+        run: python korean/tools/build_msghdr_overlay.py
+
+      - name: Build shared native MSG codepage and binaries
+        run: |
+          python korean/tools/build_native_korean_msghdr_shared.py \
+            --extra-charset korean/scenario/items.ko.tsv \
+            --extra-charset korean/scenario/monsters.ko.tsv \
+            --output-dir build/psx-korean-msg \
+            --map build/psx-korean-msg/korean_dbcs.tsv
+
+      - name: Build current shared Korean charset and native PSX glyph assets
         working-directory: Wiz7_Patching_Utilities/KoreanFontTools
         run: |
           python build_korean_font.py build \
-            ../../korean/MSGHDR_indexText.ko.txt \
-            ../../korean/segments \
+            ../../korean/build/MSGHDR_indexText.ko.merged.txt \
+            ../../korean/scenario/items.ko.tsv \
+            ../../korean/scenario/monsters.ko.tsv \
             --reserve-low-through 279 \
             --bdf "$RUNNER_TEMP/Galmuri11.bdf" \
             --out ../../build/psx-korean-font
 
-      - name: Build merged Korean MSG source
-        run: python korean/tools/build_msghdr_overlay.py
+      - name: Cross-check font and MSG shared native codepages
+        run: |
+          python - <<'PY'
+          import csv
+          from pathlib import Path
 
-      - name: Audit merged MSG with native two-byte Hangul
+          def load(path):
+              rows = list(csv.DictReader(Path(path).open(encoding='utf-8'), delimiter='\t'))
+              return {r['char']: (r['code_hex'].upper().replace('0X', ''), int(r['slot'])) for r in rows}
+
+          font = load('build/psx-korean-font/korean_dbcs.tsv')
+          msg = load('build/psx-korean-msg/korean_dbcs.tsv')
+          if font != msg:
+              keys = sorted(set(font) | set(msg))
+              bad = [(ch, font.get(ch), msg.get(ch)) for ch in keys if font.get(ch) != msg.get(ch)]
+              for item in bad[:20]:
+                  print('MAPPING_MISMATCH', item)
+              raise SystemExit(f'{len(bad)} font/MSG shared native mapping mismatch(es)')
+          print(f'SHARED_NATIVE_CODEPAGE_PARITY_OK entries={len(font)}')
+          PY
+
+      - name: Audit merged MSG with shared native two-byte Hangul
         working-directory: Wiz7_Patching_Utilities/KoreanFontTools
         run: |
           python audit_native_msg_limits.py \
@@ -58,47 +88,17 @@ jobs:
             --output ../../build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt \
             --tsv ../../build/psx-korean-font/native_msg_lengths.tsv
 
-      - name: Cross-check font and MSG native codepages
-        run: |
-          python - <<'PY'
-          import csv
-          import sys
-          from pathlib import Path
-
-          sys.path.insert(0, str(Path('korean/tools').resolve()))
-          from native_psx_codepage import allocate_native_mapping
-
-          mapping_path = Path('build/psx-korean-font/korean_dbcs.tsv')
-          rows = list(csv.DictReader(mapping_path.open(encoding='utf-8'), delimiter='\t'))
-          chars = [r['char'] for r in rows]
-          expected = allocate_native_mapping(chars)
-
-          mismatches = []
-          for row in rows:
-              ch = row['char']
-              got_code = row['code_hex'].upper().replace('0X', '')
-              got_slot = int(row['slot'])
-              exp = expected[ch]
-              exp_code = f'{exp.lead:02X}{exp.trail:02X}'
-              if got_code != exp_code or got_slot != exp.slot:
-                  mismatches.append((ch, got_code, got_slot, exp_code, exp.slot))
-
-          if mismatches:
-              for item in mismatches[:20]:
-                  print('MAPPING_MISMATCH', item)
-              raise SystemExit(f'{len(mismatches)} font/MSG native mapping mismatch(es)')
-          print(f'NATIVE_CODEPAGE_PARITY_OK entries={len(rows)}')
-          PY
-
       - name: Print build summary
         run: |
           cat build/psx-korean-font/build_info.json
+          echo
+          cat build/psx-korean-msg/BUILD_REPORT.txt
           echo
           cat build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt
           python - <<'PY'
           from pathlib import Path
           chars = Path('build/psx-korean-font/charset.txt').read_text(encoding='utf-8').strip()
-          print(f'CURRENT_UNIQUE_HANGUL={len(chars)}')
+          print(f'CURRENT_SHARED_UNIQUE_HANGUL={len(chars)}')
           print(f'CONSERVATIVE_FONT_CAPACITY={2048 - 280}')
           print(f'HEADROOM={(2048 - 280) - len(chars)}')
           PY
@@ -116,5 +116,9 @@ jobs:
             build/psx-korean-font/korean_glyphs.tsv
             build/psx-korean-font/NATIVE_MSG_LIMIT_REPORT.txt
             build/psx-korean-font/native_msg_lengths.tsv
+            build/psx-korean-msg/MISCJ.HDR
+            build/psx-korean-msg/MSGJ.HDR
+            build/psx-korean-msg/MSGJ.DBS
+            build/psx-korean-msg/BUILD_REPORT.txt
           if-no-files-found: error
           retention-days: 30
