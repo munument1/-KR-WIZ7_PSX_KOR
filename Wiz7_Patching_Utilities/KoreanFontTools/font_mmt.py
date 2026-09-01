@@ -1,29 +1,20 @@
 #!/usr/bin/env python3
 """Read/write Wizardry VII PSX FONT.MMT glyph bitplanes.
 
-Verified against the Japanese FONT.MMT used by this project:
-  file size       50,724 bytes
-  header          36 bytes
-  pixel payload   1024 x 99 @ 4bpp (two pixels per byte)
-  CLUT rows       y=0..2
-  glyph rows      y=3..98, eight rows of 12px
-  physical cell   16 x 12
-  physical groups 64 x 8 = 512
-  logical glyphs  512 * 4 bitplanes = 2048
+The FONT.MMT bitmap contains 2048 physical glyph bitplanes arranged as 512
+16x12 cells with four independent 1-bit glyphs per 4bpp cell. Physical bitplane
+order is the natural order 0,1,2,3.
 
-Each 4-bit pixel stores one bit from four logical glyphs. A logical glyph index
-selects physical_group=index//4. The renderer's CLUT selection does *not* map
-logical plane 0..3 to nibble bit 0..3 in identity order. Runtime screenshot
-verification on the real PSX renderer established the mapping:
+A renderer-native glyph number is NOT the same number as the physical FONT.MMT
+slot. Comparison against the original ZENKAKU.TBL and known ASCII glyphs proves
+that the renderer is biased by four glyphs:
 
-    logical plane 0 -> physical nibble bit 2
-    logical plane 1 -> physical nibble bit 1
-    logical plane 2 -> physical nibble bit 0
-    logical plane 3 -> physical nibble bit 3
+    physical_font_slot = renderer_glyph - 4
 
-So the physical bit order is (2, 1, 0, 3). Using identity order causes a very
-specific corruption where Hangul assigned to planes 0 and 2 is replaced by the
-other Hangul sharing the same physical 4-glyph cell.
+For example ASCII 'A' is converted by the game to native code 80A5. The renderer
+calculates glyph 69, while the actual 'A' bitmap is physical FONT.MMT slot 65.
+The Korean codepage stores renderer glyph numbers, so Korean insertion must apply
+this -4 bias before touching FONT.MMT.
 """
 from __future__ import annotations
 
@@ -42,10 +33,7 @@ GROUP_COLS = WIDTH // CELL_W
 GROUP_ROWS = (HEIGHT - GLYPH_Y0) // CELL_H
 GLYPH_COUNT = GROUP_COLS * GROUP_ROWS * 4
 EXPECTED_SIZE = HEADER_SIZE + BYTES_PER_ROW * HEIGHT
-
-# Renderer logical plane -> physical 4bpp nibble bit.
-# Confirmed from actual game output: 0/2 are swapped; 1/3 are unchanged.
-PHYSICAL_PLANE_BY_LOGICAL = (2, 1, 0, 3)
+RENDERER_GLYPH_BIAS = 4
 
 
 @dataclass(frozen=True)
@@ -57,6 +45,29 @@ class FontGeometry:
     cell_w: int = CELL_W
     cell_h: int = CELL_H
     glyph_count: int = GLYPH_COUNT
+
+
+def renderer_glyph_to_font_slot(renderer_glyph: int) -> int:
+    """Convert the renderer's glyph number to a physical FONT.MMT slot."""
+    slot = renderer_glyph - RENDERER_GLYPH_BIAS
+    if not 0 <= slot < GLYPH_COUNT:
+        raise ValueError(
+            f"renderer glyph {renderer_glyph} has no physical FONT.MMT slot "
+            f"after -{RENDERER_GLYPH_BIAS} bias"
+        )
+    return slot
+
+
+def font_slot_to_renderer_glyph(slot: int) -> int:
+    """Convert a physical FONT.MMT slot to the renderer glyph number."""
+    if not 0 <= slot < GLYPH_COUNT:
+        raise ValueError(f"FONT.MMT slot out of range: {slot}")
+    renderer_glyph = slot + RENDERER_GLYPH_BIAS
+    if renderer_glyph >= GLYPH_COUNT:
+        raise ValueError(
+            f"FONT.MMT slot {slot} is not addressable by the 0..{GLYPH_COUNT - 1} renderer window"
+        )
+    return renderer_glyph
 
 
 def validate_font(data: bytes | bytearray) -> None:
@@ -85,18 +96,18 @@ def set_nibble(data: bytearray, x: int, y: int, nibble: int) -> None:
 
 
 def glyph_origin(index: int) -> Tuple[int, int, int]:
+    """Return raw texture origin/bit for a physical FONT.MMT slot."""
     if not 0 <= index < GLYPH_COUNT:
         raise ValueError(f"glyph index out of range: {index} (0..{GLYPH_COUNT - 1})")
     group = index // 4
-    logical_plane = index & 3
-    plane = PHYSICAL_PLANE_BY_LOGICAL[logical_plane]
+    plane = index & 3
     x0 = (group % GROUP_COLS) * CELL_W
     y0 = GLYPH_Y0 + (group // GROUP_COLS) * CELL_H
     return x0, y0, plane
 
 
 def extract_glyph(data: bytes | bytearray, index: int) -> Tuple[int, ...]:
-    """Return one logical 16x12 glyph as 12 row bitfields (bit15 = x0)."""
+    """Return one physical 16x12 FONT.MMT glyph as row bitfields."""
     validate_font(data)
     x0, y0, plane = glyph_origin(index)
     rows = []
@@ -119,7 +130,7 @@ def replace_glyph(
     x_offset: int = 0,
     y_offset: int = 0,
 ) -> bytes:
-    """Replace one logical renderer plane and preserve the other three glyphs."""
+    """Replace one physical FONT.MMT bitplane and preserve its neighbors."""
     validate_font(data)
     if glyph_w <= 0 or glyph_h <= 0 or glyph_w > CELL_W or glyph_h > CELL_H:
         raise ValueError("glyph dimensions must fit inside 16x12")
@@ -145,11 +156,41 @@ def replace_glyph(
     return bytes(out)
 
 
-def galmuri11_rows_to_mmt(data: bytes | bytearray, index: int, rows11: Sequence[int], *, x_offset: int = 2, y_offset: int = 0) -> bytes:
-    """Pack an 11x11 logical Galmuri bitmap into one FONT.MMT glyph slot."""
-    return replace_glyph(data, index, rows11, glyph_w=11, glyph_h=11, x_offset=x_offset, y_offset=y_offset)
+def galmuri11_rows_to_mmt(
+    data: bytes | bytearray,
+    renderer_glyph: int,
+    rows11: Sequence[int],
+    *,
+    x_offset: int = 1,
+    y_offset: int = 0,
+) -> bytes:
+    """Pack Galmuri11 for a renderer glyph into its biased FONT.MMT slot.
+
+    Runtime testing showed x_offset=2 clips the Galmuri11 rightmost column;
+    that single column carries the ㅏ arm, making every ㅏ syllable look like ㅣ.
+    x_offset=1 keeps all 11 columns visible.
+    """
+    # Compatibility with older callers whose CLI default was x_offset=2.
+    # Normalize that legacy value so existing build scripts also produce the
+    # corrected font until their CLI default is migrated to 1.
+    if x_offset == 2:
+        x_offset = 1
+    slot = renderer_glyph_to_font_slot(renderer_glyph)
+    return replace_glyph(data, slot, rows11, glyph_w=11, glyph_h=11, x_offset=x_offset, y_offset=y_offset)
 
 
-def save_replaced_glyph(font_path: Path, output_path: Path, index: int, rows11: Sequence[int], *, x_offset: int = 2, y_offset: int = 0) -> None:
+def save_replaced_glyph(
+    font_path: Path,
+    output_path: Path,
+    renderer_glyph: int,
+    rows11: Sequence[int],
+    *,
+    x_offset: int = 1,
+    y_offset: int = 0,
+) -> None:
     data = font_path.read_bytes()
-    output_path.write_bytes(galmuri11_rows_to_mmt(data, index, rows11, x_offset=x_offset, y_offset=y_offset))
+    output_path.write_bytes(
+        galmuri11_rows_to_mmt(
+            data, renderer_glyph, rows11, x_offset=x_offset, y_offset=y_offset
+        )
+    )
