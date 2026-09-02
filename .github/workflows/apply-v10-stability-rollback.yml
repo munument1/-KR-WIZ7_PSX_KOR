@@ -1,0 +1,76 @@
+name: Apply v10 stability rollback
+
+on:
+  push:
+    branches: [korean-localization]
+    paths:
+      - '.github/workflows/apply-v10-stability-rollback.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore stable runtime and v10 production policy
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git show 543e3be8b03fdabc5059af98777c061a28c6c0e7:korean/tools/patch_korean_psx_exe.py > korean/tools/patch_korean_psx_exe.py
+          git show 543e3be8b03fdabc5059af98777c061a28c6c0e7:korean/tools/test_korean_psx_runtime.py > korean/tools/test_korean_psx_runtime.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('korean/tools/build_korean_psx_disc_english_base.py')
+          s = p.read_text(encoding='utf-8')
+          if 'def restore_english_item_names' not in s:
+              s = s.replace(
+                  'TITLE_NAME = "TITL.MMT"\n',
+                  'TITLE_NAME = "TITL.MMT"\n\nITEM_START = 0x380\nITEM_STRIDE = 0x48\nITEM_COUNT = 571\nITEM_NAME_SIZE = 22\n\ndef restore_english_item_names(korean_scenario: Path, english_scenario: Path) -> None:\n    """Keep PS1 English item names until the small-font DBCS path is safe."""\n    data = bytearray(korean_scenario.read_bytes())\n    english = english_scenario.read_bytes()\n    if len(data) != len(english):\n        raise RuntimeError(f"SCENARIJ size mismatch: korean={len(data)} english={len(english)}")\n    for item_id in range(ITEM_COUNT):\n        off = ITEM_START + item_id * ITEM_STRIDE\n        data[off:off + ITEM_NAME_SIZE] = english[off:off + ITEM_NAME_SIZE]\n    korean_scenario.write_bytes(data)\n\n'
+              )
+              needle = '''        assets = full.build_full_assets(\n            root,\n            work_dir,\n            original_font=disc_files["FONT.MMT"],\n            original_exe=disc_files["PSX.EXE"],\n            original_scenario=disc_files[full.SCENARIO_NAME],\n            items=items,\n            monsters=monsters,\n            bdf=args.bdf,\n        )\n\n'''
+              repl = needle + '''        # v9 proved the PS1 inventory/item-info small-font path is not\n        # safe for native two-byte Korean item names yet. Preserve Korean\n        # monster fields but restore all item-name fields from the PS1 English base.\n        restore_english_item_names(assets[full.SCENARIO_NAME], disc_files[full.SCENARIO_NAME])\n\n'''
+              if needle not in s:
+                  raise SystemExit('build insertion point not found')
+              s = s.replace(needle, repl)
+              s = s.replace(
+                  '            fh.write("Title subtitle              : 가디아의 보주\\n")\n',
+                  '            fh.write("Title subtitle              : 가디아의 보주\\n")\n            fh.write("Item names                  : PS1 English fallback (v10 stability)\\n")\n            fh.write("Monster names               : Korean overlay retained\\n")\n'
+              )
+          p.write_text(s, encoding='utf-8')
+
+          p = Path('release/windows/apply_patch.ps1')
+          s = p.read_text(encoding='utf-8-sig')
+          import re
+          s = re.sub(r"\$ExpectedPatchedMd5 = '[0-9a-f]+'", "$ExpectedPatchedMd5 = '1654910b3c631c74780cc5b15c0f01fb'", s)
+          p.write_text('\ufeff' + s, encoding='utf-8')
+
+          Path('docs/PSX_V9_REGRESSION_V10_STABLE_2026-09-02.md').write_text('''# PSX v9 회귀 / v10 안정 롤백\n\nv9 실기 테스트에서 인벤토리 글자 붕괴와 게임 프리즈가 확인되어 실험적 아이템 렌더러 주입을 생산 경로에서 폐기한다.\n\n## v10 정책\n- v9 아이템 렌더러 주입/호출부 변경 제거\n- PS1 영문패치의 아이템 출력 경로 복구\n- 571개 아이템 이름은 영어 ASCII로 임시 복구\n- 한국어 몬스터 이름, 본문, 메뉴, 타이틀은 유지\n- `없음 -> 없본` 등 FONT 행 경계 수정은 유지\n\n## 검증값\n- BIN MD5: `1654910b3c631c74780cc5b15c0f01fb`\n- BIN SHA-256: `781cc08838db4cdf86cc9c3ff93202c5e1fd285f8ac4843321493506922109ec`\n- xdelta SHA-256: `3aadd25b571a6a2b2a65c069bb65696611996db1439f608d69ff129d2ca410b1`\n\n아이템 한국어화는 10바이트 분할, `/` 분할, 소형 폰트/OFONT 경로를 먼저 DBCS 안전하게 만든 뒤 다시 적용한다.\n''', encoding='utf-8')
+          PY
+          cat > release/windows/README.txt <<'EOF'
+          Wizardry VII PS1 한국어 자동 패처 v10 (안정성 롤백)
+          ===================================================
+
+          v9의 실험적 한국어 아이템명 렌더러는 인벤토리 프리즈를 일으켜 제거했습니다.
+          v10은 본문/메뉴/한국어 몬스터명/한글 글리프 경계 수정을 유지하면서,
+          아이템 이름만 Gertius PS1 영문패치의 영어 ASCII 이름으로 임시 복구합니다.
+
+          원본 raw BIN MD5: 188d3ee5a2a2242a719f290ea595e5ec
+          v10 BIN MD5:       1654910b3c631c74780cc5b15c0f01fb
+          v10 BIN SHA256:    781cc08838db4cdf86cc9c3ff93202c5e1fd285f8ac4843321493506922109ec
+          v10 xdelta SHA256: 3aadd25b571a6a2b2a65c069bb65696611996db1439f608d69ff129d2ca410b1
+
+          사용법은 PATCH.bat 위에 지원 원본 CHD/BIN을 끌어다 놓으면 됩니다.
+          EOF
+      - name: Run runtime unit tests
+        run: python korean/tools/test_korean_psx_runtime.py
+      - name: Commit rollback
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add korean/tools/patch_korean_psx_exe.py korean/tools/test_korean_psx_runtime.py korean/tools/build_korean_psx_disc_english_base.py release/windows/apply_patch.ps1 release/windows/README.txt docs/PSX_V9_REGRESSION_V10_STABLE_2026-09-02.md
+          git commit -m 'Rollback unsafe item renderer for v10 stability'
+          git push
