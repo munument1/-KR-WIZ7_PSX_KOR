@@ -10,13 +10,17 @@ class FontMMTTests(unittest.TestCase):
     def test_renderer_bias_and_identity_planes(self):
         # Original ZENKAKU maps ASCII 'A' to 80A5. The renderer computes glyph
         # 69, while the original FONT.MMT bitmap for A is physical slot 65.
-        self.assertEqual(font_mmt.RENDERER_GLYPH_BIAS, 4)
         self.assertEqual(font_mmt.renderer_glyph_to_font_slot(69), 65)
         self.assertEqual(font_mmt.renderer_glyph_to_font_slot(68), 64)
-        self.assertEqual(font_mmt.renderer_glyph_to_font_slot(2047), 2043)
         self.assertEqual(font_mmt.font_slot_to_renderer_glyph(65), 69)
-        with self.assertRaises(ValueError):
-            font_mmt.font_slot_to_renderer_glyph(2044)
+
+        # At a 64-cell texture-row boundary the one-cell-left relation wraps
+        # inside the same row instead of spilling into the previous row.
+        self.assertEqual(font_mmt.renderer_glyph_to_font_slot(1280), 1532)
+        self.assertEqual(font_mmt.renderer_glyph_to_font_slot(1282), 1534)
+        self.assertEqual(font_mmt.font_slot_to_renderer_glyph(1534), 1282)
+        self.assertEqual(font_mmt.renderer_glyph_to_font_slot(1792), 2044)
+        self.assertEqual(font_mmt.renderer_glyph_to_font_slot(2047), 2043)
 
         # Raw FONT.MMT bitplanes are in natural 0,1,2,3 order.
         x, y, plane = font_mmt.glyph_origin(64)
