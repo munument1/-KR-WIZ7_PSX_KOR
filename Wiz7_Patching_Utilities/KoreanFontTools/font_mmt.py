@@ -6,15 +6,11 @@ The FONT.MMT bitmap contains 2048 physical glyph bitplanes arranged as 512
 order is the natural order 0,1,2,3.
 
 A renderer-native glyph number is NOT the same number as the physical FONT.MMT
-slot. Comparison against the original ZENKAKU.TBL and known ASCII glyphs proves
-that the renderer is biased by four glyphs:
-
-    physical_font_slot = renderer_glyph - 4
-
-For example ASCII 'A' is converted by the game to native code 80A5. The renderer
-calculates glyph 69, while the actual 'A' bitmap is physical FONT.MMT slot 65.
-The Korean codepage stores renderer glyph numbers, so Korean insertion must apply
-this -4 bias before touching FONT.MMT.
+slot. Runtime verification shows the texture is addressed one 16px cell to the
+left, with horizontal wrap inside each 64-cell row.  For most glyphs this looks
+like ``physical = renderer - 4``; at the first four glyphs of a row it instead
+wraps to the final cell of that same row.  This row-wrap rule is required to
+prevent isolated substitutions such as ``음 -> 본``.
 """
 from __future__ import annotations
 
@@ -33,7 +29,7 @@ GROUP_COLS = WIDTH // CELL_W
 GROUP_ROWS = (HEIGHT - GLYPH_Y0) // CELL_H
 GLYPH_COUNT = GROUP_COLS * GROUP_ROWS * 4
 EXPECTED_SIZE = HEADER_SIZE + BYTES_PER_ROW * HEIGHT
-RENDERER_GLYPH_BIAS = 4
+GROUPS_PER_ROW = GROUP_COLS
 
 
 @dataclass(frozen=True)
@@ -48,26 +44,31 @@ class FontGeometry:
 
 
 def renderer_glyph_to_font_slot(renderer_glyph: int) -> int:
-    """Convert the renderer's glyph number to a physical FONT.MMT slot."""
-    slot = renderer_glyph - RENDERER_GLYPH_BIAS
-    if not 0 <= slot < GLYPH_COUNT:
-        raise ValueError(
-            f"renderer glyph {renderer_glyph} has no physical FONT.MMT slot "
-            f"after -{RENDERER_GLYPH_BIAS} bias"
-        )
-    return slot
+    """Map a renderer glyph to the physical FONT.MMT slot.
+
+    The FONT texture is addressed one 16px cell to the left of the renderer
+    group, with horizontal wrap inside each 64-cell texture row.  This matches
+    the original ASCII A->80A5 observation (renderer 69 -> physical 65) while
+    also handling row-boundary glyphs correctly.  A plain ``glyph - 4`` is
+    wrong for renderer groups at column 0: those wrap to column 63 of the same
+    row instead of the previous row.
+    """
+    if not 0 <= renderer_glyph < GLYPH_COUNT:
+        raise ValueError(f"renderer glyph out of range: {renderer_glyph}")
+    group, plane = divmod(renderer_glyph, 4)
+    row, col = divmod(group, GROUPS_PER_ROW)
+    physical_group = row * GROUPS_PER_ROW + ((col - 1) % GROUPS_PER_ROW)
+    return physical_group * 4 + plane
 
 
 def font_slot_to_renderer_glyph(slot: int) -> int:
-    """Convert a physical FONT.MMT slot to the renderer glyph number."""
+    """Inverse of :func:`renderer_glyph_to_font_slot`."""
     if not 0 <= slot < GLYPH_COUNT:
         raise ValueError(f"FONT.MMT slot out of range: {slot}")
-    renderer_glyph = slot + RENDERER_GLYPH_BIAS
-    if renderer_glyph >= GLYPH_COUNT:
-        raise ValueError(
-            f"FONT.MMT slot {slot} is not addressable by the 0..{GLYPH_COUNT - 1} renderer window"
-        )
-    return renderer_glyph
+    group, plane = divmod(slot, 4)
+    row, col = divmod(group, GROUPS_PER_ROW)
+    renderer_group = row * GROUPS_PER_ROW + ((col + 1) % GROUPS_PER_ROW)
+    return renderer_group * 4 + plane
 
 
 def validate_font(data: bytes | bytearray) -> None:
