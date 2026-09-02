@@ -1,4 +1,4 @@
-Wizardry VII PS1 한국어 자동 패처 v7
+Wizardry VII PS1 한국어 자동 패처 v8
 ====================================
 
 지원 입력
@@ -19,51 +19,52 @@ DuckStation
 - CHD 입력: Wizardry7_PSX_KOR.chd를 바로 실행
 - BIN 입력: Wizardry7_PSX_KOR.cue를 실행
 
-v7 빌드 기준
-- 일본 PS1판 원본에 Gertius WIZ7_PSX_ENG V1.0을 먼저 적용한 결과를 실제 베이스로 사용합니다.
+v8 빌드 기준
+- 일본 PS1판 원본에 Gertius WIZ7_PSX_ENG V1.0을 먼저 적용한 결과를 베이스로 사용합니다.
 - DOS판/Gold판 실행 파일이나 UI 자산을 베이스로 사용하지 않습니다.
-- 영문 PS1 패치가 수정한 PCFILE., SCENARIO.HDR, TALK.SCR, OPEN.STR, BOOK.STR, OPEN.TXT, AD.XA는 그대로 보존합니다.
-- 그 위에 한국어 MSG/FONT/SCENARIO/EXE 오버레이를 적용합니다.
+- 영문 PS1 패치의 메뉴/미디어/스크립트 자산은 유지하고 한국어 MSG/FONT/SCENARIO/EXE만 오버레이합니다.
 
-v7 핵심 변경점
-- FONT.MMT 실제 저장 슬롯 = 렌더러 글리프 - 4 규칙 반영
-- FONT.MMT 물리 비트플레인 순서는 0,1,2,3
-- Galmuri11 x 배치를 1픽셀로 수정해 ㅏ가 ㅣ처럼 보이던 현상 해결
-- 캐릭터 생성/정보창의 고정폭 UI는 DBCS 안정화를 위해 PS1 영문패치의 ASCII 문자열 사용
-  (종족/직업/성별, LVL/RNK/EXP, 능력치 라벨, 직업 등급명 등)
-- MSGJ.HDR/MSGJ.DBS는 PS1 영문패치 파일 크기에 맞춰 패딩해 후속 파일 LBA를 보존
-- PCFILE.과 PS1 전용 영문 메뉴/미디어 자산을 영문패치와 동일하게 유지
-- TITL.MMT에 남아 있던 일본어 부제 "ガーディアの宝珠"를 "가디아의 보주"로 교체
-- 한국어 본문/메뉴/아이템/몬스터 번역 유지
+v8 핵심 변경점
+- FONT.MMT의 실제 관계를 단순 renderer-4가 아닌 64셀 행 내부 1셀 좌측 래핑으로 수정
+- 이 경계 버그로 다른 정상 한글로 치환되던 16자 일괄 수정
+  퍼 팽 팬 팩 / 읏 읍 음 읊 / 봄 볼 본 복 / 되 됐 돼 동
+- 제보된 "없음 -> 없본" 현상을 같은 원인으로 수정
+- Galmuri11 x 배치 1픽셀 유지(ㅏ가 ㅣ처럼 보이던 문제 수정 유지)
+- SCENARIJ.DBS의 한국어 아이템 이름을 표시하도록 PSX.EXE 아이템 이름 출력 6개 호출부를 DBCS 경로로 전환
+- 아이템 정보창의 초소형/고정폭 UI는 깨짐 방지를 위해 PS1 영문판 ASCII로 임시 안정화
+  (USE/ASSAY/SPECIAL/DAMAGE/RESISTANCES 등)
+- 캐릭터 정보창의 고정폭 UI도 계속 영어 ASCII로 유지
+- TITL.MMT의 일본어 부제는 "가디아의 보주"로 유지
+
+현재 폰트 정책
+- 본문/대화/아이템명/몬스터명: FONT.MMT + Galmuri11 + 2바이트 DBCS
+- 초소형 1바이트 UI: 현재 영어 유지. 추후 OFONT.MMT + Galmuri7 전용 소형 한글 코드표 검토
 
 검증 원본 raw BIN
 MD5    188d3ee5a2a2242a719f290ea595e5ec
 CRC32  bab5dd73
 
-검증 PS1 영문패치 V1.0 BIN
-MD5    7fb464147ab7144facae337226c91aa5
-SHA256 6d61aaccf5a21853077f96b66e5fea4a2859611d89b5a93358e79d2f504c1683
+검증 한국어 v8 BIN
+MD5    fcb5eb5d6d5db9ac511585b9d7e74033
+SHA256 50237b8b2feb0ec9f30896fb93810d65307ebad9ae7df0295788389ea3371ed6
 
-검증 한국어 v7 BIN
-MD5    381cf7ff7509f35b5fbc423791ed689d
-SHA256 7dc0fb63ccd4565542e07c134881d54c4faa84c7145b73c67d6d5708f5d67df1
-
-v7 xdelta SHA256
-b421320fa47264b185be5e8fb95417d639e656cd0a52750f4cbeb61edd0f896a
+v8 xdelta SHA256
+80a7f13918874547c8b200614ebea99de642648820843fcd147a43feea314703
 
 검증
-- 일본판 원본 BIN → v7 xdelta → v7 BIN 바이트 일치
-- v7 BIN → CHD → BIN 바이트 일치
+- 일본판 원본 BIN → v8 xdelta → v8 BIN 바이트 일치
+- v8 BIN → CHD → BIN 바이트 일치
 - chdman verify 성공
 - PS1 영문패치 파일시스템 대비 의도한 7개 파일만 변경
   MISCJ.HDR / MSGJ.DBS / MSGJ.HDR / SCENARIJ.DBS / FONT.MMT / TITL.MMT / PSX.EXE
+- 현재 공용 코드표 1,133개 한글을 새 FONT 행-래핑 규칙으로 전수 검증
 
 현재 실제 플레이 테스트 중인 개발 빌드입니다.
 우선 확인할 항목:
-- 기본 캐릭터 이름이 영어로 표시되는지
-- 캐릭터 정보창 하단 깨진 글자가 사라졌는지
-- 고정폭 UI가 영어로 안정적으로 표시되는지
-- 타이틀 부제가 "가디아의 보주"로 표시되는지
+- "특이한 것은 없음"에서 "없음"이 정확히 표시되는지
+- 게임 곳곳에서 특정 한글이 다른 한글로 치환되던 현상이 사라졌는지
+- 인벤토리/아이템 목록의 아이템 이름이 한국어로 표시되는지
+- 아이템 정보창에 깨진 글자가 사라지고 작은 라벨은 영어로 정상 표시되는지
 
 원본 게임 데이터는 배포 패키지에 포함하지 않습니다.
 CHD 입력은 임시 raw BIN을 만들기 때문에 작업 중 충분한 디스크 여유 공간이 필요합니다.
