@@ -9,7 +9,7 @@ $PatchFile = Join-Path $BaseDir 'Wizardry7_PSX_KOR.xdelta'
 $ToolsDir = Join-Path $BaseDir 'tools'
 
 $ExpectedSourceMd5 = '188d3ee5a2a2242a719f290ea595e5ec'
-$ExpectedPatchedMd5 = 'fcb5eb5d6d5db9ac511585b9d7e74033'
+$ExpectedPatchedMd5 = '3b3f08395e545e9d42930bd0f780491e'
 $OutputBaseName = 'Wizardry7_PSX_KOR'
 
 function Resolve-Tool([string]$Name) {
