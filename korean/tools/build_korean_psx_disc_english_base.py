@@ -28,6 +28,23 @@ ENGLISH_BIN_MD5 = "7fb464147ab7144facae337226c91aa5"
 ENGLISH_BIN_SHA256 = "6d61aaccf5a21853077f96b66e5fea4a2859611d89b5a93358e79d2f504c1683"
 TITLE_NAME = "TITL.MMT"
 
+ITEM_START = 0x380
+ITEM_STRIDE = 0x48
+ITEM_COUNT = 571
+ITEM_NAME_SIZE = 22
+
+def restore_english_item_names(korean_scenario: Path, english_scenario: Path) -> None:
+    """Keep PS1 English item names until the small-font DBCS path is safe."""
+    data = bytearray(korean_scenario.read_bytes())
+    english = english_scenario.read_bytes()
+    if len(data) != len(english):
+        raise RuntimeError(f"SCENARIJ size mismatch: korean={len(data)} english={len(english)}")
+    for item_id in range(ITEM_COUNT):
+        off = ITEM_START + item_id * ITEM_STRIDE
+        data[off:off + ITEM_NAME_SIZE] = english[off:off + ITEM_NAME_SIZE]
+    korean_scenario.write_bytes(data)
+
+
 
 def verify_english_bin(path: Path) -> core.Hashes:
     hashes = core.file_hashes(path)
@@ -125,6 +142,11 @@ def main(argv: list[str] | None = None) -> int:
             bdf=args.bdf,
         )
 
+        # v9 proved the PS1 inventory/item-info small-font path is not
+        # safe for native two-byte Korean item names yet. Preserve Korean
+        # monster fields but restore all item-name fields from the PS1 English base.
+        restore_english_item_names(assets[full.SCENARIO_NAME], disc_files[full.SCENARIO_NAME])
+
         assets_root = work_dir / "assets-full"
         msg_dir = assets_root / "msg"
         english_msg_dir = disc_files["MSGJ.DBS"].parent
@@ -171,6 +193,8 @@ def main(argv: list[str] | None = None) -> int:
             fh.write("Fixed-width UI              : English fallback applied\n")
             fh.write("MSG layout                  : padded to English HDR/DBS sizes\n")
             fh.write("Title subtitle              : 가디아의 보주\n")
+            fh.write("Item names                  : PS1 English fallback (v10 stability)\n")
+            fh.write("Monster names               : Korean overlay retained\n")
             if output_xdelta:
                 fh.write(f"Final xdelta                : {output_xdelta}\n")
 
