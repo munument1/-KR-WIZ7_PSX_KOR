@@ -37,6 +37,20 @@ assert len(KOREAN_WRAP_CODE) == 336
 assert hashlib.sha256(KOREAN_WRAP_CODE).hexdigest() == KOREAN_WRAP_SHA256
 MIN_SIZE = INJECT_OFFSET + len(KOREAN_WRAP_CODE)
 
+# Item-name draw callsites. The English patch has both byte-oriented and
+# DBCS-aware wrappers. Korean SCENARIJ.DBS names must use the DBCS-aware
+# variants or each two-byte native code is treated as two independent glyphs.
+ITEM_DRAW_CALL_PATCHES = (
+    # jal 0x8006D004 -> jal 0x8006D198
+    (0x102F0, bytes.fromhex("01b4010c"), bytes.fromhex("66b4010c")),
+    (0x10330, bytes.fromhex("01b4010c"), bytes.fromhex("66b4010c")),
+    # jal 0x8006D0A0 -> jal 0x8006D2FC
+    (0x54078, bytes.fromhex("28b4010c"), bytes.fromhex("bfb4010c")),
+    (0x54094, bytes.fromhex("28b4010c"), bytes.fromhex("bfb4010c")),
+    (0x540BC, bytes.fromhex("28b4010c"), bytes.fromhex("bfb4010c")),
+    (0x540D8, bytes.fromhex("28b4010c"), bytes.fromhex("bfb4010c")),
+)
+
 
 def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -80,6 +94,19 @@ def patch_exe(data: bytes) -> tuple[bytes, list[str]]:
         f"injected DBCS-aware 16-glyph wrap routine at 0x{INJECT_OFFSET:X} "
         f"({len(KOREAN_WRAP_CODE)} bytes, runtime 0x{INJECT_RUNTIME:08X})"
     )
+
+    for offset, expected, patched in ITEM_DRAW_CALL_PATCHES:
+        current = bytes(out[offset : offset + 4])
+        if current == expected:
+            out[offset : offset + 4] = patched
+            notes.append(f"rerouted item-name draw call at 0x{offset:X} to DBCS-aware path")
+        elif current == patched:
+            notes.append(f"item-name draw call at 0x{offset:X} already DBCS-aware")
+        else:
+            raise ValueError(
+                f"unexpected bytes at item draw call 0x{offset:X}: {current.hex(' ')}; "
+                f"expected {expected.hex(' ')} or {patched.hex(' ')}"
+            )
 
     return bytes(out), notes
 
