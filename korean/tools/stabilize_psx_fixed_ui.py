@@ -26,6 +26,11 @@ DEFAULT_FIXED_UI_RANGES = (
     (140, 141),
     (160, 162),
     (200, 219),
+    # Item/equipment compact UI: these paths are byte-width based.
+    (300, 309),
+    (350, 358),
+    (400, 413),
+    (450, 487),
     (800, 937),
 )
 
