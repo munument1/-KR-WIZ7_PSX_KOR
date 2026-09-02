@@ -17,6 +17,8 @@ class RuntimePatchTests(unittest.TestCase):
         data = bytearray(exe_patch.MIN_SIZE + 64)
         data[exe_patch.CALL_OFFSET : exe_patch.CALL_OFFSET + 4] = exe_patch.CALL_ORIGINAL
         data[exe_patch.LOWERCASE_OFFSET] = 0x60
+        for offset, expected, _ in exe_patch.ITEM_DRAW_CALL_PATCHES:
+            data[offset : offset + 4] = expected
 
         patched, _ = exe_patch.patch_exe(bytes(data))
         self.assertEqual(
@@ -31,6 +33,8 @@ class RuntimePatchTests(unittest.TestCase):
             ],
             exe_patch.KOREAN_WRAP_CODE,
         )
+        for offset, _, expected_patched in exe_patch.ITEM_DRAW_CALL_PATCHES:
+            self.assertEqual(patched[offset : offset + 4], expected_patched)
 
         patched_again, _ = exe_patch.patch_exe(patched)
         self.assertEqual(patched_again, patched)
@@ -39,6 +43,8 @@ class RuntimePatchTests(unittest.TestCase):
         data = bytearray(exe_patch.MIN_SIZE + 64)
         data[exe_patch.CALL_OFFSET : exe_patch.CALL_OFFSET + 4] = b"BAD!"
         data[exe_patch.LOWERCASE_OFFSET] = 0x60
+        for offset, expected, _ in exe_patch.ITEM_DRAW_CALL_PATCHES:
+            data[offset : offset + 4] = expected
         with self.assertRaises(ValueError):
             exe_patch.patch_exe(bytes(data))
 
