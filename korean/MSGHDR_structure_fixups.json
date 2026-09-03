@@ -1,6 +1,6 @@
 {
   "description": "PS1 MSGHDR structural corrections applied after Korean sparse overlays are loaded. These rules do not translate text; they only restore PS1 control/event/display structure or drop Gold-only IDs.",
-  "use_source_record_ids": [2000, 2001],
+  "use_source_record_ids": [2000, 2001, 15180, 15300, 15320, 15470, 15840],
   "reconcile_control_ids": [
     2528, 2529, 3900, 9120, 9125, 9320, 9325, 9330, 9610,
     10011, 10012, 10013, 10014, 10016, 10017, 10018, 10019, 10021, 10022, 10023, 10024,
